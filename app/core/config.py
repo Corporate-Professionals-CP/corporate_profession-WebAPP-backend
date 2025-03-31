@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
+    GOOGLE_AUTHORIZE_URL: str
+    GOOGLE_ACCESS_TOKEN_URL: str
 
     # Email Configuration
     MAILJET_API_KEY: str
