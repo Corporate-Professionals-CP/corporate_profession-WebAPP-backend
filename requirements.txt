@@ -15,17 +15,6 @@ cloudinary==1.43.0
 coverage==7.5.3
 cryptography==44.0.2
 decorator==5.1.1
-Django==5.0.6
-django-cors-headers==4.3.1
-django-debug-toolbar==4.4.2
-django-environ==0.11.2
-django-extensions==3.2.3
-django-filter==24.2
-django-redis==5.4.0
-django-rest-framework==0.1.0
-djangorestframework==3.15.1
-djangorestframework-api-key==3.0.0
-djangorestframework-simplejwt==5.3.1
 dnspython==2.7.0
 ecdsa==0.19.1
 email_validator==2.2.0
@@ -90,6 +79,7 @@ starlette==0.46.1
 tomli==2.2.1
 traitlets==5.14.3
 typing_extensions==4.12.2
+httpx==0.24.1
 urllib3==2.3.0
 uvicorn==0.34.0
 uvloop==0.21.0
