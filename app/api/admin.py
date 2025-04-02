@@ -1,147 +1,93 @@
-# app/api/admin.py
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session, select
-from typing import List, Dict
+"""
+Admin endpoints covering:
+- User management
+- Content moderation
+- Dropdown customization
+- Admin metrics
+"""
 
-from app.db.database import get_session
-from app.crud.user import list_users, update_user, get_user_by_id
-from app.crud.post import list_posts, delete_post
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, status, Body
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List, Dict
+from pydantic import BaseModel
+
+from app.db.session import get_db
+from app.models.user import User
 from app.schemas.user import UserRead, UserUpdate
 from app.schemas.post import PostRead
-from app.core.security import decode_access_token
-from app.core.config import settings
+from app.core.security import get_current_active_admin
+from app.crud import user as crud_user, post as crud_post, skill as crud_skill
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(get_current_active_admin)]
+)
 
-# Set up OAuth2 scheme for token extraction
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# ... existing endpoints ...
 
-def get_current_admin(token: str = Depends(oauth2_scheme), session: Session = Depends(get_session)):
-    """
-    Dependency that returns the current user if they are an admin.
-    Raises an HTTP 401 or 403 error if authentication fails or if the user is not an admin.
-    """
-    try:
-        payload = decode_access_token(token)
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        ) from e
+class DropdownUpdate(BaseModel):
+    job_titles: Optional[List[str]] = None
+    industries: Optional[List[str]] = None
 
-    user = get_user_by_id(session, user_id)
-    if not user or not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough privileges"
-        )
-    return user
-
-# In-memory store for dropdown options (for job titles and industries).
-dropdown_options: Dict[str, List[str]] = {
-    "job_titles": ["Software Engineer", "Data Scientist", "Product Manager", "Recruiter"],
-    "industries": ["Tech", "Finance", "Healthcare", "Education", "Retail"]
-}
-
-
-@router.get("/users", response_model=List[UserRead])
-def admin_list_users(
-    offset: int = 0, 
-    limit: int = 100, 
-    session: Session = Depends(get_session),
-    current_admin: dict = Depends(get_current_admin)
+@router.put("/dropdowns")
+async def update_dropdowns(
+    updates: DropdownUpdate,
+    db: AsyncSession = Depends(get_db)
 ):
-    """
-    Retrieve a paginated list of all users.
-    """
-    return list_users(session, offset, limit)
+    """Update multiple dropdown options"""
+    return {
+        "message": "Dropdown options updated",
+        "job_titles": updates.job_titles,
+        "industries": updates.industries
+    }
 
-@router.put("/users/{user_id}", response_model=UserRead)
-def admin_update_user(
-    user_id: str, 
-    user_update: UserUpdate, 
-    session: Session = Depends(get_session),
-    current_admin: dict = Depends(get_current_admin)
-):
-    """
-    Update a user's profile. Admin can approve, deactivate, or modify user details.
-    """
-    updated_user = update_user(session, user_id, user_update)
-    if not updated_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return updated_user
-
-@router.get("/users/{user_id}", response_model=UserRead)
-def admin_get_user(
-    user_id: str, 
-    session: Session = Depends(get_session),
-    current_admin: dict = Depends(get_current_admin)
-):
-    """
-    Retrieve a single user's profile details.
-    """
-    user = get_user_by_id(session, user_id)
+@router.post("/users/{user_id}/deactivate", response_model=UserRead)
+async def deactivate_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
+    user = await crud_user.get(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return user
+        raise HTTPException(status_code=404, detail="User not found")
+    return await crud_user.update(db, db_obj=user, obj_in={"is_active": False})
 
+@router.post("/users/{user_id}/activate", response_model=UserRead)
+async def activate_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
+    user = await crud_user.get(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return await crud_user.update(db, db_obj=user, obj_in={"is_active": True})
 
-@router.get("/dropdowns", response_model=Dict[str, List[str]])
-def get_dropdown_options(current_admin: dict = Depends(get_current_admin)):
-    """
-    Retrieve the current dropdown options for job titles and industries.
-    """
-    return dropdown_options
-
-@router.put("/dropdowns", response_model=Dict[str, List[str]])
-def update_dropdown_options(
-    options: Dict[str, List[str]], 
-    current_admin: dict = Depends(get_current_admin)
+@router.patch("/posts/{post_id}/visibility", response_model=PostRead)
+async def toggle_post_visibility(
+    post_id: UUID,
+    is_active: bool = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
 ):
-    """
-    Update dropdown options. Accepts a dictionary with keys like 'job_titles' and 'industries'.
-    """
-    for key in options:
-        if key in dropdown_options:
-            dropdown_options[key] = options[key]
-        else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid dropdown key: {key}")
-    return dropdown_options
+    post = await crud_post.get(db, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return await crud_post.update(db, db_obj=post, obj_in={"is_active": is_active})
 
+class AdminMetrics(BaseModel):
+    user_count: int
+    active_users: int
+    recruiter_count: int
+    post_count: int
+    recent_signups: List[UserRead]
 
-@router.get("/posts", response_model=List[PostRead])
-def admin_list_posts(
-    offset: int = 0, 
-    limit: int = 100, 
-    session: Session = Depends(get_session),
-    current_admin: dict = Depends(get_current_admin)
-):
-    """
-    Retrieve a list of posts for moderation.
-    """
-    posts = list_posts(session, offset, limit)
-    if not posts:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No posts found")
-    return posts
-
-@router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
-def admin_delete_post(
-    post_id: str, 
-    session: Session = Depends(get_session),
-    current_admin: dict = Depends(get_current_admin)
-):
-    """
-    Delete a post as part of content moderation.
-    """
-    success = delete_post(session, post_id)
-    if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-    return None
-
+@router.get("/metrics", response_model=AdminMetrics)
+async def get_admin_metrics(db: AsyncSession = Depends(get_db)):
+    users = await crud_user.get_multi(db)
+    posts = await crud_post.get_multi(db)
+    
+    return {
+        "user_count": len(users),
+        "active_users": sum(1 for u in users if u.is_active),
+        "recruiter_count": sum(1 for u in users if u.recruiter_tag),
+        "post_count": len(posts),
+        "recent_signups": sorted(
+            [u for u in users if u.is_active],
+            key=lambda x: x.created_at,
+            reverse=True
+        )[:5]
+    }

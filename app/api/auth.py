@@ -1,174 +1,216 @@
-from datetime import timedelta
+"""
+Complete authentication endpoints
+"""
+
+from datetime import datetime, timedelta
+from jose import jwt, JWTError
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Body
-from sqlmodel import Session
+from fastapi.security import OAuth2PasswordRequestForm
 from authlib.integrations.starlette_client import OAuth
+from authlib.jose import JsonWebToken
 
-from app.db.database import get_session
-from app.crud.user import get_user_by_email, create_user, update_user
-from app.schemas.auth import Token
-from app.schemas.user import UserCreate, UserUpdate
-from app.core.security import hash_password, verify_password, create_access_token
+from app.db.session import get_db
+from app.schemas.auth import Token, TokenData, EmailVerify, PasswordReset
+from app.core.security import (
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    create_refresh_token,
+    verify_token
+)
 from app.core.config import settings
+from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id
 
-router = APIRouter()
-
-# In-memory token stores (for demonstration purposes)
-email_verification_tokens = {}
-password_reset_tokens = {}
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/signup", response_model=dict, status_code=status.HTTP_201_CREATED)
-def signup(user: UserCreate, session: Session = Depends(get_session)):
-    """
-    Create a new user account and initiate email verification.
-    """
-    existing_user = get_user_by_email(session, user.email)
+if all([settings.GOOGLE_CLIENT_ID, settings.GOOGLE_CLIENT_SECRET]):
+    oauth = OAuth()
+    oauth.register(
+        name="google",
+        client_id=settings.GOOGLE_CLIENT_ID,
+        client_secret=settings.GOOGLE_CLIENT_SECRET,
+        authorize_url=settings.GOOGLE_AUTHORIZE_URL,
+        access_token_url=settings.GOOGLE_ACCESS_TOKEN_URL,
+        client_kwargs={"scope": "openid email profile"},
+        server_metadata_url=settings.GOOGLE_METADATA_URL
+    )
+if 'oauth' in locals():
+    @router.get("/google/login")
+    async def google_login(request: Request):
+        """Initiate Google OAuth flow"""
+        redirect_uri = request.url_for("google_callback")
+        return await oauth.google.authorize_redirect(request, redirect_uri)
+
+    @router.get("/google/callback", response_model=Token)
+    async def google_callback(
+        request: Request,
+        db: AsyncSession = Depends(get_db)
+    ):
+        """Google OAuth flow"""
+        try:
+            token = await oauth.google.authorize_access_token(request)
+            jwt = JsonWebToken.unsecure(token['id_token'])
+            claims = jwt.decode()
+            
+            user_info = GoogleUserInfo(
+                email=claims["email"],
+                name=claims.get("name", ""),
+                picture=claims.get("picture"),
+                email_verified=claims.get("email_verified", False)
+            )
+
+            if not user_info.email_verified:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Google email not verified"
+                )
+
+            # Find or create user
+            user = await get_user_by_email(db, user_info.email)
+            if not user:
+                user_data = {
+                    "email": user_info.email,
+                    "full_name": user_info.name,
+                    "is_verified": True,
+                    "hashed_password": get_password_hash(str(uuid.uuid4()))
+                }
+                user = await create_user(db, user_data)
+
+            return {
+                "access_token": create_access_token({"sub": str(user.id)}),
+                "refresh_token": create_refresh_token({"sub": str(user.id)}),
+                "token_type": "bearer",
+                "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            }
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Google authentication failed: {str(e)}"
+            )
+
+@router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def signup(
+    user_in: UserCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Register new user with email verification"""
+    existing_user = await get_user_by_email(db, user_in.email)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail={
+                "error": "email_exists",
+                "message": "Email already registered"
+            }
         )
-    
-    # Hash the password before storing
-    user.password = hash_password(user.password)
-    new_user = create_user(session, user)
-    
-    # Generate an email verification token (simulate; in production, send via email)
-    verification_token = create_access_token(
-        {"email": new_user.email}, expires_delta=timedelta(minutes=30)
-    )
-    email_verification_tokens[new_user.email] = verification_token
-    print(f"[DEBUG] Verification token for {new_user.email}: {verification_token}")
-    
-    return {"message": "User created. Please verify your email."}
 
-@router.post("/verify-email", status_code=status.HTTP_200_OK)
-def verify_email(email: str = Body(...), token: str = Body(...), session: Session = Depends(get_session)):
-    """
-    Verify a user's email address using the provided token.
-    """
-    expected_token = email_verification_tokens.get(email)
-    if not expected_token or expected_token != token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid verification token"
-        )
+    user = await create_user(db, user_in)
     
-    db_user = get_user_by_email(session, email)
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+    # Generate verification token
+    verification_token = create_access_token(
+        {"sub": str(user.id), "type": "verify"},
+        timedelta(minutes=30)
+    )
     
-    # Here, update the user record to mark the email as verified.
-    user_update = UserUpdate()
-    # Example: user_update.is_verified = True
-    # For now, we'll assume verification is complete and remove the token.
-    del email_verification_tokens[email]
+    # In production: Send email with verification_token
+    print(f"Verification token: {verification_token}")
     
-    return {"message": "Email verified successfully"}
+    return user
+
+@router.post("/verify-email", response_model=UserRead)
+async def verify_email(
+    verify: EmailVerify,
+    db: AsyncSession = Depends(get_db)
+):
+    """Complete email verification"""
+    try:
+        payload = verify_token(verify.token, expected_type="verify")
+        user = await get_user_by_id(db, payload["sub"])
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        await update_user(db, user.id, {"is_verified": True})
+        return user
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
 
 @router.post("/login", response_model=Token)
-def login(email: str = Body(...), password: str = Body(...), session: Session = Depends(get_session)):
-    """
-    Authenticate a user using email and password, and return a JWT token.
-    """
-    db_user = get_user_by_email(session, email)
-    if not db_user or not verify_password(password, db_user.password):
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db)
+):
+    """Email/password login"""
+    user = await get_user_by_email(db, form_data.username)
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
-    access_token = create_access_token({"sub": db_user.id})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@router.post("/forgot-password", status_code=status.HTTP_200_OK)
-def forgot_password(email: str = Body(...), session: Session = Depends(get_session)):
-    """
-    Initiate password recovery by generating a reset token.
-    """
-    db_user = get_user_by_email(session, email)
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail={
+                "error": "invalid_credentials",
+                "message": "Incorrect email or password"
+            },
+            headers={"WWW-Authenticate": "Bearer"}
         )
     
-    reset_token = create_access_token({"sub": db_user.id}, expires_delta=timedelta(minutes=30))
-    password_reset_tokens[email] = reset_token
-    print(f"[DEBUG] Password reset token for {email}: {reset_token}")
-    
-    return {"message": "Password reset instructions have been sent to your email"}
+    return {
+        "access_token": create_access_token({"sub": str(user.id)}),
+        "refresh_token": create_refresh_token({"sub": str(user.id)}),
+        "token_type": "bearer",
+        "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    }
 
-@router.post("/reset-password", status_code=status.HTTP_200_OK)
-def reset_password(email: str = Body(...), token: str = Body(...), new_password: str = Body(...), session: Session = Depends(get_session)):
-    """
-    Reset a user's password using the provided reset token.
-    """
-    expected_token = password_reset_tokens.get(email)
-    if not expected_token or expected_token != token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token"
+@router.post("/refresh-token", response_model=Token)
+async def refresh_token(
+    refresh_token: str = Body(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Refresh access token"""
+    try:
+        payload = verify_token(refresh_token, expected_type="refresh")
+        user = await get_user_by_id(db, payload["sub"])
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return {
+            "access_token": create_access_token({"sub": str(user.id)}),
+            "refresh_token": create_refresh_token({"sub": str(user.id)}),
+            "token_type": "bearer",
+            "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        }
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+@router.post("/forgot-password")
+async def forgot_password(
+    email: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    """Initiate password reset"""
+    user = await get_user_by_email(db, email)
+    if user:
+        reset_token = create_access_token(
+            {"sub": str(user.id), "type": "reset"},
+            timedelta(minutes=30)
         )
+        # In production: Send email with reset_token
+        print(f"Password reset token: {reset_token}")
     
-    db_user = get_user_by_email(session, email)
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Update password after hashing
-    user_update = UserUpdate(password=hash_password(new_password))
-    updated_user = update_user(session, db_user.id, user_update)
-    if not updated_user:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update password"
-        )
-    del password_reset_tokens[email]
-    
-    return {"message": "Password updated successfully"}
+    return {"message": "If email exists, reset instructions sent"}
 
-
-# Configure Google OAuth Client
-oauth = OAuth()
-oauth.register(
-    "google",
-    client_id=settings.GOOGLE_CLIENT_ID,
-    client_secret=settings.GOOGLE_CLIENT_SECRET,
-    authorize_url=settings.GOOGLE_AUTHORIZE_URL,
-    access_token_url=settings.GOOGLE_ACCESS_TOKEN_URL,
-    client_kwargs={"scope": "openid email profile"},
-)
-
-@router.get("/google/login")
-async def google_login(request: Request):
-    """
-    Redirects the user to the Google login page.
-    """
-    return await oauth.google.authorize_redirect(request, settings.GOOGLE_REDIRECT_URI)
-
-@router.get("/google/callback", response_model=Token)
-async def google_callback(request: Request, session: Session = Depends(get_session)):
-    """
-    Handles Google OAuth callback: authenticates the user, creates an account if necessary, and returns a JWT token.
-    """
-    token = await oauth.google.authorize_access_token(request)
-    user_info = await oauth.google.parse_id_token(request, token)
-    
-    if not user_info or "email" not in user_info:
-        raise HTTPException(status_code=400, detail="Google authentication failed")
-    
-    email = user_info["email"]
-    user = get_user_by_email(session, email)
-    
-    if not user:
-        # Create a new user for OAuth login; mark as verified
-        user_data = {
-            "email": email,
-            "name": user_info.get("name", ""),
-            "is_verified": True,  # OAuth users are considered verified
-
+@router.post("/reset-password")
+async def reset_password(
+    reset: PasswordReset,
+    db: AsyncSession = Depends(get_db)
+):
+    """Complete password reset"""
+    try:
+        payload = verify_token(reset.token, expected_type="reset")
+        user = await get_user_by_id(db, payload["sub"])
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        await update_user(db, user.id, {"hashed_password": get_password_hash(reset.new_password)})
+        return {"message": "Password updated successfully"}
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
