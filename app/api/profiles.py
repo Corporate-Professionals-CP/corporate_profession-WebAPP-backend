@@ -218,19 +218,6 @@ async def delete_cv(
             detail=f"Failed to delete CV: {str(e)}"
         )
 
-@router.post("/{user_id}/cv", response_model=UserRead)
-async def upload_cv(
-    user_id: UUID,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Upload/update user CV"""
-    if str(current_user.id) != str(user_id) and not current_user.is_admin:
-        raise HTTPException(403, "Not authorized")
-    
-    return await upload_user_cv(db, str(user_id), file)
-
 @router.get("/{user_id}/cv", response_class=FileResponse)
 async def download_cv(
     user_id: UUID,
@@ -251,15 +238,4 @@ async def download_cv(
         media_type="application/octet-stream"
     )
 
-@router.delete("/{user_id}/cv", status_code=204)
-async def delete_cv(
-    user_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Remove user CV"""
-    if str(current_user.id) != str(user_id) and not current_user.is_admin:
-        raise HTTPException(403, "Not authorized")
-    
-    await upload_user_cv(db, str(user_id))
 
