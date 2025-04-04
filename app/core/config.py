@@ -3,7 +3,9 @@ Application configuration settings with enhanced security and validation.
 Loads from environment variables with type checking.
 """
 
-from pydantic import AnyUrl, BaseSettings, PostgresDsn, RedisDsn, validator
+from pathlib import Path
+from pydantic import AnyUrl, PostgresDsn, RedisDsn, validator
+from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
