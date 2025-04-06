@@ -174,7 +174,7 @@ async def upload_user_cv(
     user_id: str,
     file: Optional[UploadFile] = None
 ) -> Optional[User]:
-    """Handle CV upload/removal with transaction"""
+    """Handle CV upload/removal with cloudinary"""
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(404, "User not found")
@@ -187,8 +187,8 @@ async def upload_user_cv(
         
         # If file provided, save new CV
         if file:
-            user.cv_url = await save_uploaded_file(file, user_id)
-        
+            user.cv_url = await save_uploaded_file(file, str(user.id))
+
         await db.commit()
         await db.refresh(user)
         return user

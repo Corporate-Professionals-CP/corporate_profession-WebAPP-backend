@@ -23,7 +23,7 @@ from app.crud.user import (
     get_profile_completion
 )
 from app.core.config import settings
-from app.utils.file_validation import validate_file_upload
+from app.utils.file_handlng import save_uploaded_file, delete_user_file
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -141,7 +141,7 @@ async def update_profile(
 
     return updated_user
 
-@router.post("/{user_id}/cv", response_model=UserRead)
+@router.post("/{user_id}/cv", response_model=User Read)
 async def upload_cv(
     user_id: UUID,
     file: UploadFile = File(...),
@@ -161,16 +161,13 @@ async def upload_cv(
             detail="Not authorized to update this profile"
         )
 
-    # Validate file type and size
-    await validate_file_upload(file, ["pdf", "docx"], max_size=5*1024*1024)  # 5MB max
-
     try:
         # Save file and update user record
         user = await upload_user_cv(db, user_id, file)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                detail="User  not found"
             )
         return user
     except Exception as e:
@@ -200,7 +197,7 @@ async def delete_cv(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="User  not found"
         )
 
     if not user.cv_url:
@@ -211,7 +208,7 @@ async def delete_cv(
 
     try:
         # Remove file and update user record
-        await upload_user_cv(db, user_id, None)
+        await upload_user_cv(db, user_id, None)  # This will delete the CV
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -228,14 +225,5 @@ async def download_cv(
     if not user or not user.cv_url:
         raise HTTPException(404, "CV not found")
     
-    cv_path = settings.UPLOAD_DIR / user.cv_url
-    if not cv_path.exists():
-        raise HTTPException(404, "CV file not found")
-    
-    return FileResponse(
-        cv_path,
-        filename=f"{user.full_name}_CV{cv_path.suffix}",
-        media_type="application/octet-stream"
-    )
-
-
+    # Since the CV is stored in Cloudinary, the URL will be returned
+    return {"cv_url": user.cv_url}
