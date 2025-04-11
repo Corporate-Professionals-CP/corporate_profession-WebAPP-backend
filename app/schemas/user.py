@@ -1,5 +1,5 @@
 """
-Enhanced user schemas fully aligned with PRD requirements
+User schemas fully aligned with requirements
 - (Profile Creation & Management)
 - (Security & Privacy)
 """
@@ -17,7 +17,7 @@ class UserBase(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=100)
     bio: Optional[str] = Field(None, max_length=500)
     job_title: str = Field(..., max_length=100)
-    email: Optional[EmailStr] = Field(None)  # PRD 2.2: Email is optional
+    email: Optional[EmailStr] = Field(None)  # Email is optional
     phone: Optional[str] = Field(None, regex=r"^\+?[1-9]\d{1,14}$")  # E.164 format
     industry: Industry
     years_of_experience: ExperienceLevel
@@ -29,11 +29,11 @@ class UserBase(BaseModel):
     certifications: Optional[str] = Field(None, max_length=200)
     linkedin: Optional[HttpUrl] = None  # Proper URL validation
     recruiter_tag: bool = Field(False)
-    hide_profile: bool = Field(False)  # PRD 2.7 privacy setting
+    hide_profile: bool = Field(False)  # privacy setting
 
 class UserCreate(UserBase):
     """
-    User registration schema with enhanced password validation
+    User registration schema with password validation
     Secure registration with email verification
     """
     password: SecretStr = Field(..., min_length=8)
@@ -65,11 +65,11 @@ class UserRead(UserBase):
     """
     id: str  # UUID
     is_active: bool
-    is_verified: bool  # PRD 4.1 email verification
+    is_verified: bool  # email verification
     is_admin: bool = False
     created_at: datetime
     updated_at: datetime
-    skills: List[str] = Field(default_factory=list)  # PRD 2.2 skills
+    skills: List[str] = Field(default_factory=list)  # 2.2 skills
     cv_url: Optional[str] = None  # CV upload
 
     class Config:

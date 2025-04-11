@@ -1,6 +1,6 @@
 """
 Pydantic schemas for post data validation and serialization.
-Ensures API contracts match PRD requirements.
+Ensures API contracts match requirements.
 """
 
 from datetime import datetime

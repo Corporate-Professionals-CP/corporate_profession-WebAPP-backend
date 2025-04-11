@@ -27,7 +27,7 @@ class Skill(SkillBase, table=True):
     """Skill reference data - simple tag system"""
     id: Optional[int] = Field(default=None, primary_key=True)
     
-    # Relationship to users (PRD 2.2 - profile skills)
+    # Relationship to users (Profile skills)
     users: List["User"] = Relationship(
         back_populates="skills",
         link_model=UserSkill
