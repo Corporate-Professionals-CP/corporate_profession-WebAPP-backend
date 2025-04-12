@@ -107,16 +107,20 @@ async def signup(
         )
 
     user = await create_user(db, user_in)
-    
+
     # Generate verification token
     verification_token = create_access_token(
         {"sub": str(user.id), "type": "verify"},
         timedelta(minutes=30)
     )
-    
-    # In production: Send email with verification_token
-    print(f"Verification token: {verification_token}")
-    
+
+    # Mailjet integration
+    await send_verification_email(
+        email=user.email,
+        name=user.full_name,
+        token=verification_token
+    )
+
     return user
 
 @router.post("/verify-email", response_model=UserRead)
@@ -193,10 +197,16 @@ async def forgot_password(
             {"sub": str(user.id), "type": "reset"},
             timedelta(minutes=30)
         )
-        # In production: Send email with reset_token
-        print(f"Password reset token: {reset_token}")
-    
+        
+        # Mailjet integration
+        await send_password_reset_email(
+            email=user.email,
+            name=user.full_name,
+            token=reset_token
+        )
+
     return {"message": "If email exists, reset instructions sent"}
+
 
 @router.post("/reset-password")
 async def reset_password(

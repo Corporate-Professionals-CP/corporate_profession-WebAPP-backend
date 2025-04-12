@@ -15,27 +15,27 @@ class Settings(BaseSettings):
     PROJECT_VERSION: str = "1.0.0"
     OPENAPI_URL: str = "/openapi.json"
     DOCS_URL: str = "/docs"
-    
+
     # Database Configuration
     DATABASE_URL: PostgresDsn
     TEST_DATABASE_URL: Optional[PostgresDsn] = None
-    
+
     # Authentication
     SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
-    
+
     # OAuth Providers
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
-    
+
     # Email Service
-    SMTP_HOST: str
-    SMTP_PORT: int
-    SMTP_USER: str
-    SMTP_PASSWORD: str
+    MAILJET_API_KEY: str
+    MAILJET_SECRET_KEY: str
+    VERIFICATION_EMAIL_TEMPLATE_ID: Optional[int] = None
+    PASSWORD_RESET_TEMPLATE_ID: Optional[int] = None
     EMAILS_FROM_EMAIL: str
     EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 48
 
@@ -44,13 +44,13 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str
     CLOUDINARY_API_SECRET: str
     CLOUDINARY_FOLDER: str = "cv_uploads"
-    
+
     # Redis (for rate limiting)
     REDIS_URL: Optional[RedisDsn] = None
-    
+
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = ["*"]
-    
+
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v):
         if isinstance(v, str):
@@ -63,4 +63,3 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
 
 settings = Settings()
-
