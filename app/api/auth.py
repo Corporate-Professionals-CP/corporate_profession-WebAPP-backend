@@ -21,6 +21,11 @@ from app.core.security import (
 from app.core.config import settings
 from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id
 
+from app.core.email import (
+    send_verification_email,
+    send_password_reset_email
+)
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
