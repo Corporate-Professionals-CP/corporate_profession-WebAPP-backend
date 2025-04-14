@@ -14,7 +14,7 @@ from fastapi import HTTPException, status
 from datetime import datetime
 
 from app.models.post import Post, PostType
-from app.schemas.post import PostCreate, PostUpdate
+from app.schemas.post import PostCreate, PostUpdate, PostSearch
 
 async def create_post(
     session: AsyncSession, 
@@ -169,6 +169,7 @@ async def get_feed_posts(
                 Post.industry.is_(None)
             )
         )
+    return result.scalars().all()
     
     # Additional filters
     if post_type:
@@ -184,4 +185,66 @@ async def get_feed_posts(
         .offset(offset)
         .limit(limit)
     )
+
+async def get_posts_by_user(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    include_inactive: bool = False,
+    offset: int = 0,
+    limit: int = 100
+) -> List[Post]:
+    """
+    Retrieve all posts by a specific user with pagination.
+    Follows requirements for user post management.
+    """
+    query = select(Post).where(Post.user_id == str(user_id))
+    
+    if not include_inactive:
+        query = query.where(Post.is_active == True)
+
+    result = await session.execute(
+        query.order_by(Post.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+async def search_posts(
+    session: AsyncSession,
+    search_params: PostSearch
+) -> List[Post]:
+    """
+    Search posts with advanced filtering
+    Implements feed filtering requirements
+    """
+    query = select(Post).where(Post.is_active == True)
+
+    # Keyword search in title/content
+    if search_params.query:
+        query = query.where(
+            or_(
+                Post.title.ilike(f"%{search_params.query}%"),
+                Post.content.ilike(f"%{search_params.query}%")
+            )
+        )
+
+    # Industry filter
+    if search_params.industry:
+        query = query.where(Post.industry == search_params.industry)
+
+    # Post type filter
+    if search_params.post_type:
+        query = query.where(Post.post_type == search_params.post_type)
+
+    # Date range filter
+    if search_params.created_after:
+        query = query.where(Post.created_at >= search_params.created_after)
+
+    # Apply pagination and ordering
+    result = await session.execute(
+        query.order_by(Post.created_at.desc())
+        .offset(search_params.offset)
+        .limit(search_params.limit)
+    )
+
     return result.scalars().all()

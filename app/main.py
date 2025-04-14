@@ -2,10 +2,9 @@
 Main FastAPI application configuration
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -27,10 +26,7 @@ from app.core.exceptions import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize application services"""
-    # Create upload directory if it doesn't exist
-    upload_dir = Path(settings.UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Create database tables
     await init_db()
     yield
@@ -45,9 +41,6 @@ app = FastAPI(
     docs_url=settings.DOCS_URL,
     lifespan=lifespan
 )
-
-# Mount static files for CV downloads
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS Middleware
 app.add_middleware(

@@ -6,7 +6,7 @@ Loads from environment variables with type checking.
 from pathlib import Path
 from pydantic import AnyUrl, PostgresDsn, RedisDsn, validator
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 
 class Settings(BaseSettings):
     # Application Metadata
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     PROJECT_VERSION: str = "1.0.0"
     OPENAPI_URL: str = "/openapi.json"
     DOCS_URL: str = "/docs"
+    API_V1_STR: str = "/api/v1"
 
     # Database Configuration
     DATABASE_URL: PostgresDsn
@@ -23,13 +24,16 @@ class Settings(BaseSettings):
     # Authentication
     SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
-    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = None
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = None
 
     # OAuth Providers
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
+    GOOGLE_AUTHORIZE_URL: str
+    GOOGLE_ACCESS_TOKEN_URL: str
+    GOOGLE_METADATA_URL: str = "https://accounts.google.com/.well-known/openid-configuration"
 
     # Email Service
     MAILJET_API_KEY: str
@@ -37,7 +41,7 @@ class Settings(BaseSettings):
     VERIFICATION_EMAIL_TEMPLATE_ID: Optional[int] = None
     PASSWORD_RESET_TEMPLATE_ID: Optional[int] = None
     EMAILS_FROM_EMAIL: str
-    EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 48
+    EMAILS_FROM_NAME: str = "Corporate Professionals"
 
     # Cloudinary Configuration
     CLOUDINARY_CLOUD_NAME: str
@@ -49,7 +53,7 @@ class Settings(BaseSettings):
     REDIS_URL: Optional[RedisDsn] = None
 
     # CORS
-    BACKEND_CORS_ORIGINS: list[str] = ["*"]
+    BACKEND_CORS_ORIGINS: List[str] = ["*"]
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v):

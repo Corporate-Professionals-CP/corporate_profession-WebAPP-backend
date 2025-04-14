@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.models.user import User
 from app.models.post import PostType
 from app.schemas.post import PostCreate, PostRead, PostUpdate, PostSearch
@@ -24,7 +24,7 @@ from app.crud.post import (
     get_posts_by_user,
     search_posts
 )
-from app.api.deps import get_current_active_user, get_current_active_admin
+from app.core.security import get_current_active_user, get_current_active_admin
 from app.core.config import settings
 
 router = APIRouter(prefix="/posts", tags=["posts"])

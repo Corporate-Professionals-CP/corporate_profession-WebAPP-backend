@@ -9,10 +9,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession as AsyncSessionSQLModel
 
 from app.core.config import settings
 
-# Async engine for PostgreSQL
+# Use the original DATABASE_URL and modify for asyncpg
 async_engine = create_async_engine(
-    settings.DATABASE_URL.replace("postgresql:"),
-    echo=True,  # Set to False in production
+    str(settings.DATABASE_URL).replace("postgresql://", "postgresql+asyncpg://", 1),
+    echo=True,  # will be False in production
     future=True  # Required for SQLModel async support
 )
 
@@ -27,10 +27,7 @@ AsyncSessionLocal = sessionmaker(
 async def init_db():
     """Initialize database tables"""
     async with async_engine.begin() as conn:
-        # Create all tables
         await conn.run_sync(SQLModel.metadata.create_all)
-        # Optional: Seed initial data
-        # await seed_initial_data(conn)
 
 async def get_db() -> AsyncSession:
     """
@@ -41,4 +38,3 @@ async def get_db() -> AsyncSession:
     """
     async with AsyncSessionLocal() as session:
         yield session
-

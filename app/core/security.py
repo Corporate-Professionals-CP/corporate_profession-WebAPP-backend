@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-
+from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer
@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException, status
 
 from app.core.config import settings
 from app.models.user import User
-from app.db.session import get_db
+from app.db.database import get_db
 from app.crud.user import get_user_by_id
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -110,6 +110,19 @@ async def get_recruiter_user(
 async def get_admin_user(
     current_user: User = Depends(get_current_active_user)
 ) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    return current_user
+
+
+
+async def get_current_active_admin(
+    current_user: User = Depends(get_current_active_user)
+) -> User:
+    """Verify user has admin privileges and is active"""
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

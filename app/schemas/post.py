@@ -44,5 +44,29 @@ class PostRead(PostBase):
     created_at: datetime
     updated_at: datetime
 
+class PostSearch(BaseModel):
+    """Schema for post search/filter parameters"""
+    query: Optional[str] = Field(None, description="Search by keywords in title/content")
+    industry: Optional[Industry] = None
+    post_type: Optional[PostType] = None
+    created_after: Optional[datetime] = Field(
+        None, 
+        description="Filter posts created after this date"
+    )
+    limit: int = Field(100, ge=1, le=1000, description="Pagination limit")
+    offset: int = Field(0, ge=0, description="Pagination offset")
+
     class Config:
-        orm_mode = True
+        json_schema_extra = {
+            "example": {
+                "query": "software engineer",
+                "industry": Industry.TECH,
+                "post_type": PostType.JOB_OPPORTUNITY,
+                "created_after": "2024-01-01T00:00:00",
+                "limit": 20,
+                "offset": 0
+            }
+        }
+
+    class Config:
+        from_attributes = True

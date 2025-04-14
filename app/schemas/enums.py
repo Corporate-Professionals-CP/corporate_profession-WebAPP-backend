@@ -2,9 +2,9 @@
 Defines enumerations used throughout the application.
 """
 
-from enum import Enum, StrEnum
+from enum import Enum
 
-class Industry(StrEnum):
+class Industry(Enum):
     """
     Industry classification for professionals.
     """
@@ -12,14 +12,14 @@ class Industry(StrEnum):
     FINANCE = "Finance"
     HEALTHCARE = "Healthcare"
     EDUCATION = "Education"
-    OTHER = "Other"  # Added as for future expansion
+    OTHER = "Other"  # Added for future expansion
 
     @classmethod
     def list(cls):
         """Returns list of all valid values for API validation"""
         return [item.value for item in cls]
 
-class ExperienceLevel(StrEnum):
+class ExperienceLevel(Enum):
     """
     Professional experience ranges.
     """
@@ -32,7 +32,7 @@ class ExperienceLevel(StrEnum):
     def list(cls):
         return [item.value for item in cls]
 
-class Gender(StrEnum):
+class Gender(Enum):
     """
     Gender identity options with inclusive default.
     """

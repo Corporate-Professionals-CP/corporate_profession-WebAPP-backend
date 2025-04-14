@@ -12,7 +12,7 @@ from typing import Union, Optional
 import shutil
 import os
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.models.user import User
 from app.schemas.user import UserRead, UserPublic, UserUpdate, UserProfileCompletion
 from app.core.security import get_current_active_user, get_current_active_admin
@@ -23,7 +23,8 @@ from app.crud.user import (
     get_profile_completion
 )
 from app.core.config import settings
-from app.utils.file_handlng import save_uploaded_file, delete_user_file
+from app.utils.file_handling import save_uploaded_file, delete_user_file
+from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -141,7 +142,7 @@ async def update_profile(
 
     return updated_user
 
-@router.post("/{user_id}/cv", response_model=User Read)
+@router.post("/{user_id}/cv", response_model=UserRead)
 async def upload_cv(
     user_id: UUID,
     file: UploadFile = File(...),

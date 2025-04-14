@@ -29,4 +29,4 @@ class UserDirectoryItem(BaseModel):
     is_recruiter: bool
     
     class Config:
-        orm_mode = True
+        from_attributes = True

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from sqlmodel import select, and_, or_
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.models.user import User
 from app.schemas.directory import DirectorySearchParams, UserDirectoryItem, LocationFilter
 from app.core.security import get_current_user

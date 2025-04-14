@@ -5,6 +5,7 @@ security requirements
 
 from datetime import datetime
 from pydantic import BaseModel
+from typing import Optional
 
 class Token(BaseModel):
     """Complete token response"""

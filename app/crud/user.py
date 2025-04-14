@@ -7,7 +7,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, UploadFile
 
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserPublic
@@ -196,3 +196,58 @@ async def upload_user_cv(
     except Exception as e:
         await db.rollback()
         raise HTTPException(400, str(e))
+
+
+async def get_profile_completion(session: AsyncSession, user_id: str) -> float:
+    """
+    Calculate profile completion percentage based on filled required fields.
+    Follows the profile requirements from the PRD section 2.2.
+    """
+    user = await get_user_by_id(session, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # List of required fields from
+    required_fields = [
+        'full_name',
+        'job_title', 
+        'industry',
+        'years_of_experience',
+        'location',
+        'skills',
+        'education',
+        'company',
+        'bio'
+    ]
+
+    # Optional fields that contribute to completion (CV is required according to Acceptance Criteria
+    optional_fields = [
+        'email',
+        'phone',
+        'certifications',
+        'linkedin_profile',
+        'cv_url'
+    ]
+
+    total_fields = len(required_fields) + len(optional_fields)
+    completed = 0
+
+    # Check required fields
+    for field in required_fields:
+        if getattr(user, field, None):
+            completed += 1
+
+    # Check optional fields
+    for field in optional_fields:
+        if getattr(user, field, None):
+            completed += 0.5  # Give half weight to optional fields
+
+    # Special case: CV is required 
+    if user.cv_url:
+        completed += 1  # Full weight for CV
+    else:
+        completed -= 0.5  # Subtract if missing
+
+    # Calculate percentage (ensure no negative values)
+    completion = max(0, (completed / total_fields) * 100)
+    return min(round(completion, 2), 100)  # Cap at 100%

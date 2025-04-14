@@ -11,8 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict
 from pydantic import BaseModel
-
-from app.db.session import get_db
+from typing import Optional
+from app.db.database import get_db
 from app.models.user import User
 from app.schemas.user import UserRead, UserUpdate
 from app.schemas.post import PostRead

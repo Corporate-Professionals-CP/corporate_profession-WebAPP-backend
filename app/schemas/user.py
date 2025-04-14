@@ -18,7 +18,7 @@ class UserBase(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     job_title: str = Field(..., max_length=100)
     email: Optional[EmailStr] = Field(None)  # Email is optional
-    phone: Optional[str] = Field(None, regex=r"^\+?[1-9]\d{1,14}$")  # E.164 format
+    phone: Optional[str] = Field(None, pattern=r"^\+?[1-9]\d{1,14}$")  # E.164 format
     industry: Industry
     years_of_experience: ExperienceLevel
     location: str = Field(..., max_length=100)
@@ -73,7 +73,7 @@ class UserRead(UserBase):
     cv_url: Optional[str] = None  # CV upload
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
@@ -87,7 +87,7 @@ class UserUpdate(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     job_title: Optional[str] = Field(None, max_length=100)
     email: Optional[EmailStr] = None
-    phone: Optional[str] = Field(None, regex=r"^\+?[1-9]\d{1,14}$")
+    phone: Optional[str] = Field(None, pattern=r"^\+?[1-9]\d{1,14}$")
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
     location: Optional[str] = Field(None, max_length=100)
@@ -131,7 +131,7 @@ class UserPublic(BaseModel):
         )
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserProfileCompletion(BaseModel):
     """

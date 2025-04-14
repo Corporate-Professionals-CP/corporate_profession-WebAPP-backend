@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from authlib.integrations.starlette_client import OAuth
 from authlib.jose import JsonWebToken
-
-from app.db.session import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.database import get_db
 from app.schemas.auth import Token, TokenData, EmailVerify, PasswordReset
+from app.schemas.user import UserRead, UserCreate
 from app.core.security import (
     get_password_hash,
     verify_password,
