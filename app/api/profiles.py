@@ -59,7 +59,7 @@ async def get_profile(
     return UserPublic(
         id=user.id,
         full_name=user.full_name,
-        recruiter_tag=user.recruiter_tag  # PRD 2.2 - recruiter tag always visible
+        recruiter_tag=user.recruiter_tag
     )
 
 @router.get("/me", response_model=UserRead)

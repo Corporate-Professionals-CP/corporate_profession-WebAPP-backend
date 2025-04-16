@@ -17,14 +17,14 @@ async def _send_email(data: Dict[str, Any]) -> None:
     try:
         # Run synchronous Mailjet client in thread pool
         response = await asyncio.to_thread(mailjet.send.create, data=data)
-        
+
         if response.status_code != 200:
             logging.error(f"Mailjet API error: {response.status_code} - {response.text}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to send email"
             )
-            
+
     except Exception as e:
         logging.error(f"Email sending failed: {str(e)}")
         raise HTTPException(
@@ -36,7 +36,10 @@ async def send_verification_email(email: str, name: str, token: str) -> None:
     """Send email verification link using Mailjet template"""
     data = {
         'Messages': [{
-            "From": {"Email": settings.EMAIL_FROM, "Name": "Cooperate Professionals"},
+            "From": {
+                "Email": settings.EMAILS_FROM_EMAIL,
+                "Name": settings.EMAILS_FROM_NAME
+            },
             "To": [{"Email": email, "Name": name}],
             "TemplateID": settings.VERIFICATION_EMAIL_TEMPLATE_ID,
             "TemplateLanguage": True,
@@ -52,7 +55,10 @@ async def send_password_reset_email(email: str, name: str, token: str) -> None:
     """Send password reset instructions using Mailjet template"""
     data = {
         'Messages': [{
-            "From": {"Email": settings.EMAIL_FROM, "Name": "Cooperate Professionals"},
+            "From": {
+                "Email": settings.EMAILS_FROM_EMAIL,
+                "Name": settings.EMAILS_FROM_NAME
+            },
             "To": [{"Email": email, "Name": name}],
             "TemplateID": settings.PASSWORD_RESET_TEMPLATE_ID,
             "TemplateLanguage": True,
@@ -73,11 +79,11 @@ async def send_generic_email(
     """Generic function for sending transactional emails"""
     data = {
         'Messages': [{
-            "From": {"Email": settings.EMAIL_FROM, "Name": "Cooperate Professionals"},
+            "From": {
+                "Email": settings.EMAILS_FROM_EMAIL,
+                "Name": settings.EMAILS_FROM_NAME
+            },
             "To": [{"Email": email, "Name": name}],
             "TemplateID": template_id,
             "TemplateLanguage": True,
-            "Variables": variables or {}
-        }]
-    }
-    await _send_email(data)
+            "Variables
