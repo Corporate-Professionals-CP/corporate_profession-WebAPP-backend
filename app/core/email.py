@@ -1,7 +1,8 @@
+# app/core/email.py
 from mailjet_rest import Client as MailjetClient
 from fastapi import HTTPException, status
 import logging
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 import asyncio
 
 from app.core.config import settings
@@ -15,16 +16,13 @@ mailjet = MailjetClient(
 async def _send_email(data: Dict[str, Any]) -> None:
     """Base function for sending emails through Mailjet"""
     try:
-        # Run synchronous Mailjet client in thread pool
         response = await asyncio.to_thread(mailjet.send.create, data=data)
-
         if response.status_code != 200:
             logging.error(f"Mailjet API error: {response.status_code} - {response.text}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to send email"
             )
-
     except Exception as e:
         logging.error(f"Email sending failed: {str(e)}")
         raise HTTPException(
@@ -33,7 +31,10 @@ async def _send_email(data: Dict[str, Any]) -> None:
         )
 
 async def send_verification_email(email: str, name: str, token: str) -> None:
-    """Send email verification link using Mailjet template"""
+    """Send email verification link"""
+    if not settings.VERIFICATION_TEMPLATE_ID:
+        raise ValueError("Verification template ID not configured")
+
     data = {
         'Messages': [{
             "From": {
@@ -41,7 +42,7 @@ async def send_verification_email(email: str, name: str, token: str) -> None:
                 "Name": settings.EMAILS_FROM_NAME
             },
             "To": [{"Email": email, "Name": name}],
-            "TemplateID": settings.VERIFICATION_EMAIL_TEMPLATE_ID,
+            "TemplateID": settings.VERIFICATION_TEMPLATE_ID,
             "TemplateLanguage": True,
             "Variables": {
                 "name": name,
@@ -52,7 +53,10 @@ async def send_verification_email(email: str, name: str, token: str) -> None:
     await _send_email(data)
 
 async def send_password_reset_email(email: str, name: str, token: str) -> None:
-    """Send password reset instructions using Mailjet template"""
+    """Send password reset instructions"""
+    if not settings.PASSWORD_RESET_TEMPLATE_ID:
+        raise ValueError("Password reset template ID not configured")
+
     data = {
         'Messages': [{
             "From": {
@@ -69,21 +73,3 @@ async def send_password_reset_email(email: str, name: str, token: str) -> None:
         }]
     }
     await _send_email(data)
-
-async def send_generic_email(
-    email: str,
-    name: str,
-    template_id: int,
-    variables: Optional[Dict[str, Any]] = None
-) -> None:
-    """Generic function for sending transactional emails"""
-    data = {
-        'Messages': [{
-            "From": {
-                "Email": settings.EMAILS_FROM_EMAIL,
-                "Name": settings.EMAILS_FROM_NAME
-            },
-            "To": [{"Email": email, "Name": name}],
-            "TemplateID": template_id,
-            "TemplateLanguage": True,
-            "Variables

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     OPENAPI_URL: str = "/openapi.json"
     DOCS_URL: str = "/docs"
     API_V1_STR: str = "/api/v1"
+    PORT: int = None
 
     # Database Configuration
     DATABASE_URL: PostgresDsn
@@ -43,6 +44,7 @@ class Settings(BaseSettings):
     EMAILS_FROM_EMAIL: str
     EMAILS_FROM_NAME: str = "Corporate Professionals"
 
+
     # Cloudinary Configuration
     CLOUDINARY_CLOUD_NAME: str
     CLOUDINARY_API_KEY: str
@@ -50,7 +52,7 @@ class Settings(BaseSettings):
     CLOUDINARY_FOLDER: str = "cv_uploads"
 
     # Redis (for rate limiting)
-    REDIS_URL: Optional[RedisDsn] = None
+    # REDIS_URL: Optional[RedisDsn] = None
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["*"]
