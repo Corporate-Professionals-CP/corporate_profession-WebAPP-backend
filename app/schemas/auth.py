@@ -1,10 +1,5 @@
-"""
-Complete authentication schemas
-security requirements
-"""
-
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 
 class Token(BaseModel):
@@ -18,6 +13,7 @@ class TokenData(BaseModel):
     """Decoded token payload"""
     user_id: str
     type: Optional[str] = None  # 'verify' or 'reset'
+    scopes: list[str] = []
 
 class EmailVerify(BaseModel):
     """Email verification request"""
@@ -27,3 +23,12 @@ class PasswordReset(BaseModel):
     """Password reset request"""
     token: str
     new_password: str
+
+class GoogleToken(BaseModel):
+    """Google OAuth token response"""
+    id_token: str
+
+class UserCreateWithGoogle(BaseModel):
+    """User creation schema for Google OAuth"""
+    google_token: str
+    recruiter_tag: bool = False

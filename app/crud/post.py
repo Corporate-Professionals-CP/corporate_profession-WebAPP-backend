@@ -1,39 +1,53 @@
 """
-Post CRUD operations with:
-- (Posting & Feed)
-- Fixed syntax errors
-- Improved type hints
+Complete Post CRUD operations with:
+- Full compliance
+- User relationship handling
+- Improved feed algorithms
 - Better error handling
 """
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 from fastapi import HTTPException, status
-from datetime import datetime
 
-from app.models.post import Post, PostType
+from app.models.post import Post, PostStatus, PostEngagement, PostPublic
+from app.models.user import User
 from app.schemas.post import PostCreate, PostUpdate, PostSearch
+from app.schemas.enums import Industry, PostType
+from app.core.security import get_current_active_user
 
 async def create_post(
-    session: AsyncSession, 
-    post_data: PostCreate, 
-    user_id: UUID
+    session: AsyncSession,
+    post_data: PostCreate,
+    current_user: User
 ) -> Post:
     """
-    Create a new post with validation.
+    Create new post with validation and user association
     Any user can create posts
     """
-    # Validate job posts have industry specified
-    if post_data.post_type == PostType.JOB and not post_data.industry:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Job posts must specify an industry"
-        )
+    # Validate job posts
+    if post_data.post_type == PostType.JOB_POSTING:
+        if not post_data.industry:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Job posts must specify an industry"
+            )
+        if not post_data.expires_at:
+            post_data.expires_at = datetime.utcnow() + timedelta(days=30)
+
+    db_post = Post(
+        **post_data.dict(exclude={"tags"}),
+        user_id=str(current_user.id),
+        tags=post_data.tags,
+        engagement=PostEngagement(),
+        status=PostStatus.PUBLISHED,
+        published_at=datetime.utcnow()
+    )
 
     try:
-        db_post = Post(**post_data.dict(), user_id=str(user_id))
         session.add(db_post)
         await session.commit()
         await session.refresh(db_post)
@@ -45,60 +59,70 @@ async def create_post(
             detail=f"Failed to create post: {str(e)}"
         )
 
-async def get_post(
-    session: AsyncSession, 
+async def get_post_with_user(
+    session: AsyncSession,
     post_id: UUID
-) -> Optional[Post]:
+) -> Tuple[Post, User]:
     """
-    Retrieve a single post by ID
-    Post visibility
+    Retrieve post with author information
+    Post visibility rules
     """
     result = await session.execute(
-        select(Post)
+        select(Post, User)
+        .join(User)
         .where(Post.id == str(post_id))
+        .where(Post.is_active)
     )
-    return result.scalars().first()
+    post_user = result.first()
+    
+    if not post_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found or inactive"
+        )
+    
+    return post_user
 
 async def update_post(
     session: AsyncSession,
     post_id: UUID,
     post_update: PostUpdate,
-    current_user_id: UUID
+    current_user: User
 ) -> Post:
     """
-    Update post with ownership validation.
-    Post management
-    
-    Rules:
-    - Only the post author can update
-    - Admins can update any post
-    - Job posts must maintain industry tag
+    Update post with ownership and validation checks
+    Admin privileges
     """
-    db_post = await get_post(session, post_id)
-    if not db_post:
+    db_post = await get_post_with_user(session, post_id)
+    post, author = db_post
+
+    # Authorization check
+    if str(author.id) != str(current_user.id) and not current_user.is_admin:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this post"
         )
 
-    # Validate job posts maintain industry
-    if (post_update.post_type == PostType.JOB and 
-        not post_update.industry and 
-        not db_post.industry):
+    # Job post validation
+    if (post.post_type == PostType.JOB_POSTING and 
+        post_update.industry is None and 
+        post.industry is None):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Job posts must specify an industry"
+            detail="Job posts must maintain industry specification"
         )
 
     update_data = post_update.dict(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(db_post, field, value)
+        setattr(post, field, value)
+
+    post.updated_at = datetime.utcnow()
 
     try:
-        session.add(db_post)
+        session.add(post)
         await session.commit()
-        await session.refresh(db_post)
-        return db_post
+        await session.refresh(post)
+        return post
     except Exception as e:
         await session.rollback()
         raise HTTPException(
@@ -109,26 +133,26 @@ async def update_post(
 async def delete_post(
     session: AsyncSession,
     post_id: UUID,
-    current_user_id: UUID
+    current_user: User
 ) -> bool:
     """
-    Delete a post (soft delete via is_active flag)
-    Post management
-    
-    Rules:
-    - Post author can delete
-    - Admins can delete any post
+    Soft delete post with authorization checks
+    Admin privileges
     """
-    db_post = await get_post(session, post_id)
-    if not db_post:
+    db_post = await get_post_with_user(session, post_id)
+    post, author = db_post
+
+    if str(author.id) != str(current_user.id) and not current_user.is_admin:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this post"
         )
 
-    db_post.is_active = False
+    post.is_active = False
+    post.updated_at = datetime.utcnow()
+
     try:
-        session.add(db_post)
+        session.add(post)
         await session.commit()
         return True
     except Exception as e:
@@ -140,91 +164,147 @@ async def delete_post(
 
 async def get_feed_posts(
     session: AsyncSession,
+    current_user: User,
     *,
-    user_industries: Optional[List[str]] = None,
+    industries: Optional[List[Industry]] = None,
     post_type: Optional[PostType] = None,
-    user_id: Optional[UUID] = None,
-    cutoff_date: Optional[datetime] = None,
     offset: int = 0,
     limit: int = 50
-) -> List[Post]:
+) -> List[Tuple[Post, User]]:
     """
-    Retrieve posts for feed with filtering.
-    Feed displays relevant posts
-    
-    Behavior:
-    - Shows posts from user's industries
-    - Includes general posts (no industry)
-    - Filters by post type
-    - Can filter by recency
-    - Ordered by newest first
+    Retrieve personalized feed with user information
+    Relevant feed, Feed section
     """
-    query = select(Post).where(Post.is_active == True)
-    
-    # Apply industry filters
-    if user_industries:
-        query = query.where(
+    query = (
+        select(Post, User)
+        .join(User)
+        .where(Post.is_active)
+        .where(Post.status == PostStatus.PUBLISHED)
+        .where(
             or_(
-                Post.industry.in_(user_industries),
-                Post.industry.is_(None)
+                Post.expires_at.is_(None),
+                Post.expires_at > datetime.utcnow()
             )
         )
-    return result.scalars().all()
-    
-    # Additional filters
+        .order_by(Post.created_at.desc())
+    )
+
+    # Apply industry filters
+    if industries:
+        query = query.where(
+            or_(
+                Post.industry.in_(industries),
+                Post.industry.is_(None),
+                Post.visibility == "public"
+            )
+        )
+
+    # Apply post type filter
     if post_type:
         query = query.where(Post.post_type == post_type)
-    if user_id:
-        query = query.where(Post.user_id == str(user_id))
-    if cutoff_date:
-        query = query.where(Post.created_at >= cutoff_date)
-    
-    # Execute query with pagination
+
+    # Execute with pagination
     result = await session.execute(
-        query.order_by(Post.created_at.desc())
-        .offset(offset)
-        .limit(limit)
+        query.offset(offset).limit(limit)
     )
+    
+    return result.all()
+
+async def get_post(
+    session: AsyncSession,
+    post_id: UUID,
+    current_user: Optional[User] = None
+) -> Optional[Post]:
+    """
+    Retrieve a single post with visibility enforcement.
+    Post visibility rules
+    """
+    query = select(Post).where(Post.id == str(post_id), Post.is_active)
+
+    if current_user:
+        # Restrict access based on visibility
+        query = query.where(
+            or_(
+                Post.visibility == "public",
+                and_(
+                    Post.visibility == "industry",
+                    Post.industry == current_user.industry
+                ),
+                Post.user_id == str(current_user.id),
+                current_user.is_admin  # Admins can see all
+            )
+        )
+
+    result = await session.execute(query)
+    post = result.scalar_one_or_none()
+    return post
+
 
 async def get_posts_by_user(
     session: AsyncSession,
     user_id: UUID,
     *,
     include_inactive: bool = False,
+    current_user: Optional[User] = None,
     offset: int = 0,
     limit: int = 100
-) -> List[Post]:
+) -> List[Tuple[Post, User]]:
     """
-    Retrieve all posts by a specific user with pagination.
-    Follows requirements for user post management.
+    Get user's posts with visibility controls
+    Profile visibility
     """
-    query = select(Post).where(Post.user_id == str(user_id))
-    
+    query = (
+        select(Post, User)
+        .join(User)
+        .where(User.id == str(user_id))
+    )
+
     if not include_inactive:
-        query = query.where(Post.is_active == True)
+        query = query.where(Post.is_active)
+
+    # Visibility controls
+    if current_user and str(current_user.id) != str(user_id):
+        query = query.where(
+            or_(
+                Post.visibility == "public",
+                and_(
+                    Post.visibility == "industry",
+                    User.industry == current_user.industry
+                )
+            )
+        )
 
     result = await session.execute(
         query.order_by(Post.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
+    
+    return result.all()
 
 async def search_posts(
     session: AsyncSession,
-    search_params: PostSearch
-) -> List[Post]:
+    search_params: PostSearch,
+    current_user: Optional[User] = None
+) -> List[Tuple[Post, User]]:
     """
-    Search posts with advanced filtering
-    Implements feed filtering requirements
+    Advanced post search with user context
+    Search functionality
     """
-    query = select(Post).where(Post.is_active == True)
+    query = (
+        select(Post, User)
+        .join(User)
+        .where(Post.is_active)
+        .where(Post.status == PostStatus.PUBLISHED)
+    )
 
-    # Keyword search in title/content
+    # Keyword search
     if search_params.query:
         query = query.where(
             or_(
                 Post.title.ilike(f"%{search_params.query}%"),
-                Post.content.ilike(f"%{search_params.query}%")
+                Post.content.ilike(f"%{search_params.query}%"),
+                func.array_to_string(Post.tags, ',').ilike(f"%{search_params.query}%")
             )
         )
 
@@ -236,15 +316,61 @@ async def search_posts(
     if search_params.post_type:
         query = query.where(Post.post_type == search_params.post_type)
 
-    # Date range filter
-    if search_params.created_after:
-        query = query.where(Post.created_at >= search_params.created_after)
+    # Date range
+    if search_params.start_date:
+        query = query.where(Post.created_at >= search_params.start_date)
+    if search_params.end_date:
+        query = query.where(Post.created_at <= search_params.end_date)
 
-    # Apply pagination and ordering
+    # Visibility controls
+    if current_user:
+        query = query.where(
+            or_(
+                Post.visibility == "public",
+                and_(
+                    Post.visibility == "industry",
+                    User.industry == current_user.industry
+                ),
+                Post.user_id == str(current_user.id)
+            )
+        )
+
     result = await session.execute(
         query.order_by(Post.created_at.desc())
         .offset(search_params.offset)
         .limit(search_params.limit)
     )
+    
+    return result.all()
 
-    return result.scalars().all()
+async def increment_post_engagement(
+    session: AsyncSession,
+    post_id: UUID,
+    engagement_type: str = "view"
+) -> Post:
+    """
+    Track post engagement metrics
+    Success metrics
+    """
+    post = await session.get(Post, str(post_id))
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    if engagement_type == "view":
+        post.engagement.view_count += 1
+    elif engagement_type == "share":
+        post.engagement.share_count += 1
+    elif engagement_type == "bookmark":
+        post.engagement.bookmark_count += 1
+
+    try:
+        session.add(post)
+        await session.commit()
+        await session.refresh(post)
+        return post
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update engagement: {str(e)}"
+        )

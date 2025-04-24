@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # Database Configuration
     DATABASE_URL: PostgresDsn
     TEST_DATABASE_URL: Optional[PostgresDsn] = None
+    FRONTEND_URL: AnyUrl 
 
     # Authentication
     SECRET_KEY: str
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str
     GOOGLE_AUTHORIZE_URL: str
     GOOGLE_ACCESS_TOKEN_URL: str
-    GOOGLE_METADATA_URL: str = "https://accounts.google.com/.well-known/openid-configuration"
+    GOOGLE_METADATA_URL: str 
 
     # Email Service
     MAILJET_API_KEY: str

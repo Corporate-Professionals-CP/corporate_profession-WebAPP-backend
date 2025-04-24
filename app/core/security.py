@@ -1,18 +1,26 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi.security import OAuth2PasswordBearer
-from fastapi import Depends, HTTPException, status
-
+from fastapi.security import OAuth2PasswordBearer, SecurityScopes
+from fastapi import Depends, HTTPException, status, Security
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.config import settings
 from app.models.user import User
 from app.db.database import get_db
-from app.crud.user import get_user_by_id
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+
+# OAuth2 scheme with scopes
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/token",
+    scopes={
+        "user": "Regular user access",
+        "recruiter": "Recruiter privileges",
+        "admin": "Admin privileges"
+    }
+)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -20,42 +28,53 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
-def create_access_token(
+def create_token(
     user_id: str,
+    token_type: str,
+    expires_delta: Optional[timedelta] = None,
+    scopes: Optional[list[str]] = None,
     additional_claims: Optional[Dict[str, Any]] = None
 ) -> str:
-    expires = datetime.utcnow() + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+    now = datetime.utcnow()
+    expire = now + (expires_delta or timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES if token_type == "access" else settings.REFRESH_TOKEN_EXPIRE_MINUTES
+    ))
+
     payload = {
         "sub": str(user_id),
-        "exp": expires,
-        "iat": datetime.utcnow(),
-        "type": "access"
+        "exp": int(expire.timestamp()),
+        "iat": int(now.timestamp()),
+        "type": token_type,
     }
+
+    if token_type == "access":
+        payload["scopes"] = scopes or ["user"]
+
     if additional_claims:
         payload.update(additional_claims)
-    return jwt.encode(
-        payload,
-        settings.SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM
-    )
 
-def create_refresh_token(user_id: str) -> str:
-    expires = datetime.utcnow() + timedelta(
-        minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
-    )
-    payload = {
-        "sub": str(user_id),
-        "exp": expires,
-        "iat": datetime.utcnow(),
-        "type": "refresh"
-    }
-    return jwt.encode(
-        payload,
-        settings.SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM
-    )
+    try:
+        return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error encoding JWT: {str(e)}"
+        )
+
+def create_access_token(
+    user_id: str,
+    scopes: Optional[list[str]] = None,
+    expires_delta: Optional[timedelta] = None,
+    additional_claims: Optional[Dict[str, Any]] = None
+) -> str:
+    return create_token(user_id, "access", expires_delta, scopes, additional_claims)
+
+def create_refresh_token(
+    user_id: str,
+    expires_delta: Optional[timedelta] = None,
+    additional_claims: Optional[Dict[str, Any]] = None
+) -> str:
+    return create_token(user_id, "refresh", expires_delta, None, additional_claims)
 
 def verify_token(token: str, expected_type: Optional[str] = None) -> dict:
     try:
@@ -74,21 +93,42 @@ def verify_token(token: str, expected_type: Optional[str] = None) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
+    result = await db.execute(select(User).where(User.id == user_id))
+    return result.scalars().first()
+
 async def get_current_user(
+    security_scopes: SecurityScopes,
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> User:
+    if security_scopes.scopes:
+        authenticate_value = f'Bearer scope="{security_scopes.scope_str}"'
+    else:
+        authenticate_value = "Bearer"
+
     payload = verify_token(token, expected_type="access")
     user = await get_user_by_id(db, user_id=payload["sub"])
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="User not found",
+            headers={"WWW-Authenticate": authenticate_value},
         )
+
+    token_scopes = payload.get("scopes", [])
+    for scope in security_scopes.scopes:
+        if scope not in token_scopes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+                headers={"WWW-Authenticate": authenticate_value},
+            )
+
     return user
 
 async def get_current_active_user(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Security(get_current_user, scopes=["user"])
 ) -> User:
     if not current_user.is_active:
         raise HTTPException(
@@ -98,7 +138,7 @@ async def get_current_active_user(
     return current_user
 
 async def get_recruiter_user(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Security(get_current_user, scopes=["recruiter"])
 ) -> User:
     if not current_user.recruiter_tag:
         raise HTTPException(
@@ -108,7 +148,7 @@ async def get_recruiter_user(
     return current_user
 
 async def get_admin_user(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Security(get_current_user, scopes=["admin"])
 ) -> User:
     if not current_user.is_admin:
         raise HTTPException(
@@ -116,16 +156,14 @@ async def get_admin_user(
             detail="Admin privileges required"
         )
     return current_user
-
-
 
 async def get_current_active_admin(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Security(get_current_user, scopes=["admin"])
 ) -> User:
-    """Verify user has admin privileges and is active"""
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required"
         )
     return current_user
+

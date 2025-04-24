@@ -1,16 +1,11 @@
-"""
-Complete skill model implementation:
-- Skills as validated multi-select dropdown in profiles
-- Robust many-to-many relationship with users
-"""
-
 from typing import List, Optional
 from pydantic import validator
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy.orm import Mapped
 
 class SkillBase(SQLModel):
     name: str = Field(..., max_length=50)
-    
+
     @validator('name')
     def validate_skill_name(cls, v):
         v = v.strip().title()
@@ -26,9 +21,9 @@ class UserSkill(SQLModel, table=True):
 class Skill(SkillBase, table=True):
     """Skill reference data - simple tag system"""
     id: Optional[int] = Field(default=None, primary_key=True)
-    
+
     # Relationship to users (Profile skills)
-    users: List["User"] = Relationship(
+    users: Mapped[List["User"]] = Relationship(
         back_populates="skills",
         link_model=UserSkill
     )

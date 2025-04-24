@@ -4,18 +4,13 @@ Ensures API contracts match requirements.
 """
 
 from datetime import datetime
-from enum import Enum
 from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 from app.schemas.user import UserPublic
-from app.schemas.enums import Industry
+from app.schemas.enums import Industry, PostType
 
-class PostType(str, Enum):
-    JOB_OPPORTUNITY = "job_opportunity"
-    ANNOUNCEMENT = "announcement"
-    PROFESSIONAL_UPDATE = "professional_update"
 
 class PostBase(BaseModel):
     """Base schema containing core post fields"""
@@ -60,8 +55,8 @@ class PostSearch(BaseModel):
         json_schema_extra = {
             "example": {
                 "query": "software engineer",
-                "industry": Industry.TECH,
-                "post_type": PostType.JOB_OPPORTUNITY,
+                "industry": Industry.TECHNOLOGY,
+                "post_type": PostType.JOB_POSTING,
                 "created_after": "2024-01-01T00:00:00",
                 "limit": 20,
                 "offset": 0

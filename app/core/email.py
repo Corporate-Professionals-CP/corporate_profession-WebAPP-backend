@@ -1,4 +1,3 @@
-# app/core/email.py
 from mailjet_rest import Client as MailjetClient
 from fastapi import HTTPException, status
 import logging
@@ -32,7 +31,7 @@ async def _send_email(data: Dict[str, Any]) -> None:
 
 async def send_verification_email(email: str, name: str, token: str) -> None:
     """Send email verification link"""
-    if not settings.VERIFICATION_TEMPLATE_ID:
+    if not settings.VERIFICATION_EMAIL_TEMPLATE_ID:
         raise ValueError("Verification template ID not configured")
 
     data = {
@@ -42,7 +41,7 @@ async def send_verification_email(email: str, name: str, token: str) -> None:
                 "Name": settings.EMAILS_FROM_NAME
             },
             "To": [{"Email": email, "Name": name}],
-            "TemplateID": settings.VERIFICATION_TEMPLATE_ID,
+            "TemplateID": settings.VERIFICATION_EMAIL_TEMPLATE_ID,
             "TemplateLanguage": True,
             "Variables": {
                 "name": name,

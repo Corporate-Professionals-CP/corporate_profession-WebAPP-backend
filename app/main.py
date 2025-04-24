@@ -1,44 +1,24 @@
-"""
-Main FastAPI application configuration
-"""
-
 from fastapi import FastAPI, HTTPException, APIRouter
-from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from pathlib import Path
-
+from fastapi.openapi.utils import get_openapi
+from fastapi.exceptions import RequestValidationError
 from app.core.config import settings
 from app.db.database import init_db, async_engine
-from app.api import (
-    auth,
-    profiles,
-    directory,
-    posts,
-    admin,
-    feed
-)
-from app.core.exceptions import (
-    validation_exception_handler,
-    http_exception_handler
-)
+from app.api import auth, profiles, directory, posts, admin, feed
+from app.core.exceptions import validation_exception_handler, http_exception_handler
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize application services"""
-
-    # Create database tables
     await init_db()
     yield
-    # Clean up resources
     await async_engine.dispose()
 
 app = FastAPI(
     title=settings.PROJECT_TITLE,
     description=settings.PROJECT_DESCRIPTION,
     version=settings.PROJECT_VERSION,
-    openapi_url=settings.OPENAPI_URL,
-    docs_url=settings.DOCS_URL,
     lifespan=lifespan
 )
 
@@ -66,20 +46,51 @@ api_router.include_router(feed.router, tags=["Feed"])
 
 app.include_router(api_router)
 
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title=settings.PROJECT_TITLE,
+        version=settings.PROJECT_VERSION,
+        description=settings.PROJECT_DESCRIPTION,
+        routes=app.routes,
+    )
+    
+    # Add OAuth2 configuration
+    openapi_schema["components"] = {
+        "securitySchemes": {
+            "OAuth2PasswordBearer": {
+                "type": "oauth2",
+                "flows": {
+                    "password": {
+                        "tokenUrl": "/api/auth/token",
+                        "scopes": {
+                            "user": "Regular user access",
+                            "recruiter": "Recruiter privileges",
+                            "admin": "Admin privileges"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    # Add security to all endpoints that need it
+    for path_item in openapi_schema["paths"].values():
+        for operation in path_item.values():
+            if operation.get("tags") and operation["tags"][0] != "Authentication":
+                operation["security"] = [{"OAuth2PasswordBearer": []}]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
 @app.get("/", include_in_schema=False)
-async def health_check() -> dict:
-    """Basic health check endpoint"""
+async def health_check():
     return {
         "status": "healthy",
         "version": settings.PROJECT_VERSION,
-        "docs": f"{settings.DOCS_URL}"
+        "docs": "/docs"
     }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG
-    )

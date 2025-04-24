@@ -1,107 +1,157 @@
-"""
-User database model and related enumerations.
-Defines the structure of user data stored in the database.
-"""
-
 import uuid
 from datetime import datetime
-from typing import List, Optional
-from app.schemas.enums import Enum
+from typing import List, Optional, TYPE_CHECKING
 
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy.orm import Mapped, relationship
 from passlib.context import CryptContext
 
 from app.models.skill import Skill, UserSkill
+from app.schemas.enums import (
+    Industry,
+    ExperienceLevel,
+    Gender,
+    ProfileVisibility,
+    EducationLevel
+)
 
-# Password hashing configuration using bcrypt algorithm
+# Password hashing configuration
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-class Industry(str, Enum):
-    """
-    Enumeration of industry options for user profiles.
-    for dropdown selection.
-    """
-    TECH = "Tech"
-    FINANCE = "Finance"
-    HEALTHCARE = "Healthcare"
-    EDUCATION = "Education"
-    OTHER = "Other"
+if TYPE_CHECKING:
+    from app.models.post import Post
 
-class ExperienceLevel(str, Enum):
-    """
-    Enumeration of experience level options.
-    """
-    ENTRY = "0-2"
-    MID = "3-5"
-    SENIOR = "6-10"
-    EXPERT = "10+"
-
-class Gender(str, Enum):
-    """
-    Enumeration of gender options with inclusive 'Prefer not to say'.
-    """
-    MALE = "Male"
-    FEMALE = "Female"
-    OTHER = "Prefer not to say"
 
 def generate_uuid() -> str:
-    """Generate a UUID string for user IDs."""
     return str(uuid.uuid4())
 
-class User(SQLModel, table=True):
-    """
-    Main user model representing corporate professionals.
-    Maps directly to PRD requirements.
-    """
-    id: str = Field(default_factory=generate_uuid, primary_key=True, index=True)
-    full_name: str = Field(..., index=True)  # Required field
-    bio: Optional[str] = None  # Optional personal description
-    job_title: str  # Professional role (will be dropdown in UI)
-    email: Optional[str] = Field(..., index=True, unique=True)  # Unique identifier
-    phone: Optional[str] = None  # Optional contact
-    industry: Industry  # Dropdown from Industry enum
-    years_of_experience: ExperienceLevel  # PRD-specified ranges
-    location: str  # Country/State
-    age: Optional[int] = None  # Optional numeric input
-    sex: Gender  # Gender selection from enum
-    education: str  # Highest education level
-    company: str  # Current organization
-    certifications: Optional[str] = None  # Optional certifications
-    linkedin: Optional[str] = None  # Optional profile URL
-    cv_url: Optional[str] = None  # Path to uploaded CV file
+
+class UserBase(SQLModel):
+    """Base fields shared across all user schemas"""
+    full_name: str = Field(..., min_length=2, max_length=100)
+    email: Optional[str] = Field(None, regex=r"^[^@]+@[^@]+\.[^@]+$")
+    phone: Optional[str] = Field(None, regex=r"^\+?[\d\s-]{10,15}$")
+    company: str = Field(..., min_length=2, max_length=100)
+    job_title: str = Field(..., min_length=2, max_length=100)
+    bio: Optional[str] = Field(None, max_length=500)
+
+
+class User(UserBase, table=True):
+    """Complete user model with all requirements"""
+    id: str = Field(default_factory=generate_uuid, primary_key=True)
+    industry: Industry
+    years_of_experience: ExperienceLevel
+    location: str = Field(..., min_length=2, max_length=100)
+    education: EducationLevel
+
+
+    skills: List["Skill"] = Relationship(
+        back_populates="users",
+        link_model=UserSkill,
+        sa_relationship=relationship(
+            "Skill",
+            secondary="userskill",
+            lazy="selectin"
+        )
+    )
+
+    age: Optional[int] = Field(None, ge=18, le=100)
+    sex: Gender = Field(default=Gender.PREFER_NOT_TO_SAY)
+    certifications: Optional[str] = Field(None, max_length=500)
+    linkedin_profile: Optional[str] = Field(None, regex=r"^https?://(www\.)?linkedin\.com/.*$")
+    cv_url: Optional[str] = None
+    cv_uploaded_at: Optional[datetime] = None
+    visibility: ProfileVisibility = Field(default=ProfileVisibility.PUBLIC)
+    hide_profile: bool = Field(default=False)
     recruiter_tag: bool = Field(default=False)
-    hide_profile: bool = Field(default=False)  # Privacy toggle
-    is_active: bool = Field(default=True)  # Soft delete flag
-    is_admin: bool = Field(default=False)  # Admin privileges
-    is_verified: bool = Field(default=False)  # Email verification status
-    hashed_password: str  # Never store plain text passwords
-    created_at: datetime = Field(default_factory=datetime.utcnow)  # Audit field
+    is_active: bool = Field(default=True)
+    is_admin: bool = Field(default=False)
+    is_verified: bool = Field(default=False)
+    hashed_password: str
+    last_active_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column_kwargs={"onupdate": datetime.utcnow}
-    )  # Auto-updating timestamp
+    )
 
-    # Relationships
-    posts: List["Post"] = Relationship(back_populates="user")  # User's content posts
-    skills: List[Skill] = Relationship(back_populates="users", link_model=UserSkill)  # Many-to-many with skills
+    posts: Mapped[List["Post"]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={'lazy': 'selectin'}
+    )
+
+    profile_completion: float = Field(default=0.0, ge=0.0, le=100.0)
 
     def set_password(self, password: str):
-        """
-        Securely hash and store user password.
-        Uses passlib's bcrypt implementation.
-        """
+        """Hash and store password securely"""
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters")
         self.hashed_password = pwd_context.hash(password)
 
     def verify_password(self, password: str) -> bool:
-        """
-        Verify provided password against stored hash.
-        Returns True if match, False otherwise.
-        """
+        """Verify password against stored hash"""
         return pwd_context.verify(password, self.hashed_password)
 
+    def update_profile_completion(self):
+        """Calculate profile completion percentage"""
+        required_fields = [
+            'full_name', 'job_title', 'industry',
+            'years_of_experience', 'location', 'education',
+            'company', 'bio'
+        ]
+        optional_fields = [
+            'email', 'phone', 'certifications',
+            'linkedin_profile', 'cv_url'
+        ]
+
+        completed = 0
+        total_weight = len(required_fields) * 10 + len(optional_fields) * 2
+
+        for field in required_fields:
+            if getattr(self, field, None):
+                completed += 10
+
+        for field in optional_fields:
+            if getattr(self, field, None):
+                completed += 2
+
+        if self.cv_url:
+            completed += 10
+
+        self.profile_completion = min(round((completed / total_weight) * 100, 2), 100)
+
     @property
-    def feed_preferences(self) -> dict:
-        """
-        Returns user preferences for content feed algorithm.
-        """
-        return {"industry": self.industry}
+    def public_profile(self) -> dict:
+        """ Compliant public view """
+        if self.visibility == ProfileVisibility.HIDDEN:
+            return {"id": self.id, "name": "Hidden Profile"}
+
+        data = {
+            "id": self.id,
+            "name": self.full_name,
+            "job_title": self.job_title,
+            "company": self.company,
+            "industry": self.industry
+        }
+
+        if self.visibility == ProfileVisibility.PUBLIC:
+            data.update({
+                "bio": self.bio,
+                "skills": [s.name for s in self.skills],
+                "experience": self.years_of_experience
+            })
+
+        return data
+
+    @property
+    def recruiter_profile(self) -> dict:
+        """View for recruiters """
+        if not self.recruiter_tag:
+            return {}
+
+        return {
+            **self.public_profile,
+            "email": self.email,
+            "phone": self.phone,
+            "linkedin": self.linkedin_profile
+        }
