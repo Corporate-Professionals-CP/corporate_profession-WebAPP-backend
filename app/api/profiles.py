@@ -28,6 +28,15 @@ from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
+@router.get("/me", response_model=UserRead)
+async def get_own_profile(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get current user's full profile (always visible to owner)
+    """
+    return current_user
+
 @router.get("/{user_id}", response_model=Union[UserRead, UserPublic])
 async def get_profile(
     user_id: UUID,
@@ -62,16 +71,6 @@ async def get_profile(
         recruiter_tag=user.recruiter_tag
     )
 
-@router.get("/me", response_model=UserRead)
-async def get_own_profile(
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Get current user's full profile (always visible to owner)
-    Profile access
-    """
-    return current_user
-
 @router.get("/{user_id}/completion", response_model=UserProfileCompletion)
 async def get_profile_completion_status(
     user_id: UUID,
@@ -90,7 +89,7 @@ async def get_profile_completion_status(
         )
 
     completion = await get_profile_completion(db, user_id)
-    return {"completion_percentage": completion}
+    return completion
 
 @router.put("/{user_id}", response_model=UserRead)
 async def update_profile(
@@ -139,6 +138,9 @@ async def update_profile(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update profile"
         )
+    updated_user.update_profile_completion()
+
+    await db.commit()
 
     return updated_user
 

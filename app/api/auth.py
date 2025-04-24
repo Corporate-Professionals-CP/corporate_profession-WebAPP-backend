@@ -25,7 +25,7 @@ from app.core.security import (
     get_current_user
 )
 from app.core.config import settings
-from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id
+from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id, get_user_by_email_or_username
 from app.core.email import send_verification_email, send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -51,11 +51,11 @@ async def login(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        user = await get_user_by_email(db, form_data.username)
+        user = await get_user_by_email_or_username(db, form_data.username)
         if not user or not verify_password(form_data.password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
+                detail="Incorrect email/username or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
