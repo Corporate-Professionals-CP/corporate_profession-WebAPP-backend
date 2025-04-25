@@ -4,7 +4,7 @@ Ensures API contracts match requirements.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ class PostBase(BaseModel):
     content: str = Field(..., min_length=10, max_length=2000)
     post_type: PostType
     industry: Optional[Industry] = None
+    tags: List[str] = Field(default_factory=list)
 
 class PostCreate(PostBase):
     """Schema for post creation requests"""
@@ -34,10 +35,12 @@ class PostUpdate(BaseModel):
 class PostRead(PostBase):
     """Complete post schema for API responses"""
     id: UUID
-    user: UserPublic
+    user: Optional [UserPublic] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    published_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
 
 class PostSearch(BaseModel):
     """Schema for post search/filter parameters"""

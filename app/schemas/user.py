@@ -12,6 +12,7 @@ class UserBase(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, pattern=r"^\+?[\d\s-]{10,15}$")
+    username: Optional[str] = Field(None, min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
     company: str = Field(..., min_length=2, max_length=100)
     job_title: str = Field(..., min_length=2, max_length=100)
     bio: Optional[str] = Field(None, max_length=500)
@@ -23,6 +24,7 @@ class UserCreate(UserBase):
     years_of_experience: ExperienceLevel
     location: str
     education: str
+    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
 
     @validator('password')
     def validate_password(cls, v: SecretStr):
@@ -42,10 +44,17 @@ class UserCreate(UserBase):
             raise ValueError("Passwords do not match")
         return v
 
+    @validator('username')
+    def validate_username(cls, v: str):
+        if not v.isalnum() and "_" not in v:
+            raise ValueError("Username can only contain letters, numbers, and underscores")
+        return v
+
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    username: Optional[str] = None
     company: Optional[str] = None
     job_title: Optional[str] = None
     bio: Optional[str] = None
@@ -59,6 +68,8 @@ class UserUpdate(BaseModel):
     linkedin_profile: Optional[HttpUrl] = None
     visibility: Optional[ProfileVisibility] = None
     recruiter_tag: Optional[bool] = None
+    is_admin: Optional[bool] = None
+    is_active: Optional[bool] = None
 
 class UserPublic(UserBase):
     id: str
