@@ -16,7 +16,7 @@ from fastapi import HTTPException, status, UploadFile
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session, selectinload
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate, UserPublic, UserDirectoryItem
+from app.schemas.user import UserCreate, UserUpdate, UserPublic, UserDirectoryItem, UserProfileCompletion
 from app.utils.file_handling import save_uploaded_file, delete_user_file
 from app.models.user import User
 
@@ -55,7 +55,7 @@ async def get_user_by_id(session: AsyncSession, user_id: UUID) -> Optional[User]
     result = await session.execute(
         select(User)
         .options(selectinload(User.skills))
-        .where(User.id == user_id)
+        .where(User.id == str (user_id)) # convert to string
     )
     return result.scalars().first()
 
@@ -65,6 +65,15 @@ async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]
         select(User)
         .options(selectinload(User.skills))
         .where(User.email.ilike(email))
+    )
+    return result.scalars().first()
+
+async def get_user_by_email_or_username(session: AsyncSession, identifier: str) -> Optional[User]:
+    """Retrieve user by email or username"""
+    result = await session.execute(
+        select(User)
+        .options(selectinload(User.skills))
+        .where(or_(User.email == identifier, User.username == identifier))
     )
     return result.scalars().first()
 
@@ -89,11 +98,20 @@ async def update_user(
             detail="Cannot update other users"
         )
 
+    # Validate required fields
+    required_fields = ["full_name", "email", "job_title", "industry", "location", "years_of_experience"]
+    for field in required_fields:
+        if getattr(user_update, field) is None:
+            raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{field} is required"
+            )
+
     update_data = user_update.dict(exclude_unset=True)
 
     # Admin-only fields protection
     if not current_user.is_admin:
-        for field in ["is_active", "is_admin", "is_verified", "recruiter_tag"]:
+        for field in ["is_active", "is_admin", "is_verified",]:
             update_data.pop(field, None)
 
     # Apply updates
@@ -251,14 +269,13 @@ async def delete_user_cv(session: AsyncSession, user_id: UUID) -> User:
         await session.refresh(user)
     return user
 
-async def get_profile_completion(session: AsyncSession, user_id: UUID) -> Dict[str, Any]:
+async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserProfileCompletion:
     """
     Calculate detailed profile completion stats
-  
     """
     user = await get_user_by_id(session, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User  not found")
 
     required_fields = {
         'full_name': 15,
@@ -284,7 +301,7 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> Dict[s
         'total_score': 0,
         'max_score': 100,
         'sections': {},
-        'missing': []
+        'missing_fields': []
     }
 
     # Check required fields
@@ -296,7 +313,7 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> Dict[s
                 'weight': weight
             }
         else:
-            completion['missing'].append(field)
+            completion['missing_fields'].append(field)
             completion['sections'][field] = {
                 'completed': False,
                 'weight': weight
@@ -313,9 +330,19 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> Dict[s
 
     # Special CV handling (required but in optional fields)
     if not user.cv_url:
-        completion['missing'].append('cv_url')
+        completion['missing_fields'].append('cv_url')
 
-    return completion
+    # Calculate completion percentage
+    completion_percentage = (completion['total_score'] / completion['max_score']) * 100
+    print(f"Completion Percentage: {completion_percentage}") # debugging
+
+    # Return the UserProfileCompletion instance
+    return UserProfileCompletion(
+        completion_percentage=completion_percentage,
+        missing_fields=completion['missing_fields'],
+        sections=completion['sections']
+    )
+
 
 async def get_recently_active_users(
     session: AsyncSession,

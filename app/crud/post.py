@@ -15,7 +15,7 @@ from fastapi import HTTPException, status
 
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
 from app.models.user import User
-from app.schemas.post import PostCreate, PostUpdate, PostSearch
+from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead
 from app.schemas.enums import Industry, PostType
 from app.core.security import get_current_active_user
 
@@ -42,7 +42,7 @@ async def create_post(
         **post_data.dict(exclude={"tags"}),
         user_id=str(current_user.id),
         tags=post_data.tags,
-        engagement=PostEngagement(),
+        engagement={"view_count": 0, "share_count": 0, "bookmark_count": 0},
         status=PostStatus.PUBLISHED,
         published_at=datetime.utcnow()
     )
@@ -51,6 +51,9 @@ async def create_post(
         session.add(db_post)
         await session.commit()
         await session.refresh(db_post)
+
+        await session.refresh(db_post, ['user'])
+
         return db_post
     except Exception as e:
         await session.rollback()
@@ -168,6 +171,7 @@ async def get_feed_posts(
     *,
     industries: Optional[List[Industry]] = None,
     post_type: Optional[PostType] = None,
+    cutoff_date: Optional[datetime] = None,
     offset: int = 0,
     limit: int = 50
 ) -> List[Tuple[Post, User]]:
@@ -178,7 +182,6 @@ async def get_feed_posts(
     query = (
         select(Post, User)
         .join(User)
-        .where(Post.is_active)
         .where(Post.status == PostStatus.PUBLISHED)
         .where(
             or_(
@@ -188,6 +191,10 @@ async def get_feed_posts(
         )
         .order_by(Post.created_at.desc())
     )
+
+    # Add cutoff_date filter if provided
+    if cutoff_date:
+        query = query.where(Post.created_at >= cutoff_date)
 
     # Apply industry filters
     if industries:
@@ -284,47 +291,51 @@ async def get_posts_by_user(
 
 async def search_posts(
     session: AsyncSession,
-    search_params: PostSearch,
-    current_user: Optional[User] = None
+    *,
+    current_user: Optional[User] = None,
+    query: Optional[str] = None,
+    industry: Optional[Industry] = None,
+    post_type: Optional[PostType] = None,
+    created_after: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    offset: int = 0,
+    limit: int = 100
 ) -> List[Tuple[Post, User]]:
     """
     Advanced post search with user context
-    Search functionality
     """
-    query = (
+    query_stmt = (
         select(Post, User)
         .join(User)
-        .where(Post.is_active)
         .where(Post.status == PostStatus.PUBLISHED)
     )
 
     # Keyword search
-    if search_params.query:
-        query = query.where(
+    if query:
+        query_stmt = query_stmt.where(
             or_(
-                Post.title.ilike(f"%{search_params.query}%"),
-                Post.content.ilike(f"%{search_params.query}%"),
-                func.array_to_string(Post.tags, ',').ilike(f"%{search_params.query}%")
+                Post.title.ilike(f"%{query}%"),
+                Post.content.ilike(f"%{query}%")
             )
         )
 
     # Industry filter
-    if search_params.industry:
-        query = query.where(Post.industry == search_params.industry)
+    if industry:
+        query_stmt = query_stmt.where(Post.industry == industry)
 
     # Post type filter
-    if search_params.post_type:
-        query = query.where(Post.post_type == search_params.post_type)
+    if post_type:
+        query_stmt = query_stmt.where(Post.post_type == post_type)
 
     # Date range
-    if search_params.start_date:
-        query = query.where(Post.created_at >= search_params.start_date)
-    if search_params.end_date:
-        query = query.where(Post.created_at <= search_params.end_date)
+    if created_after:
+        query_stmt = query_stmt.where(Post.created_at >= created_after)
+    if end_date:
+        query_stmt = query_stmt.where(Post.created_at <= end_date)
 
     # Visibility controls
     if current_user:
-        query = query.where(
+        query_stmt = query_stmt.where(
             or_(
                 Post.visibility == "public",
                 and_(
@@ -336,11 +347,11 @@ async def search_posts(
         )
 
     result = await session.execute(
-        query.order_by(Post.created_at.desc())
-        .offset(search_params.offset)
-        .limit(search_params.limit)
+        query_stmt.order_by(Post.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
-    
+
     return result.all()
 
 async def increment_post_engagement(
