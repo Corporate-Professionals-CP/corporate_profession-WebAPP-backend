@@ -169,52 +169,63 @@ async def get_feed_posts(
     session: AsyncSession,
     current_user: User,
     *,
-    industries: Optional[List[Industry]] = None,
     post_type: Optional[PostType] = None,
     cutoff_date: Optional[datetime] = None,
     offset: int = 0,
     limit: int = 50
 ) -> List[Tuple[Post, User]]:
     """
-    Retrieve personalized feed with user information
-    Relevant feed, Feed section
+    Get feed posts according to specifications:
+    - Includes posts from user's industry AND general posts
+    - Respects post visibility settings
+    - Filters by type and date if specified
     """
     query = (
         select(Post, User)
         .join(User)
         .where(Post.status == PostStatus.PUBLISHED)
+        .where(Post.is_active == True)
         .where(
             or_(
                 Post.expires_at.is_(None),
                 Post.expires_at > datetime.utcnow()
             )
         )
-        .order_by(Post.created_at.desc())
     )
 
-    # Add cutoff_date filter if provided
-    if cutoff_date:
-        query = query.where(Post.created_at >= cutoff_date)
-
-    # Apply industry filters
-    if industries:
-        query = query.where(
-            or_(
-                Post.industry.in_(industries),
+    # Apply visibility rules (PRD requirement)
+    query = query.where(
+        or_(
+            # Posts from user's industry
+            and_(
+                Post.industry == current_user.industry,
+                Post.visibility.in_(["public", "industry"])
+            ),
+            # General posts (no industry specified)
+            and_(
                 Post.industry.is_(None),
                 Post.visibility == "public"
-            )
+            ),
+            # User's own posts
+            Post.user_id == str(current_user.id)
         )
+    )
 
     # Apply post type filter
     if post_type:
         query = query.where(Post.post_type == post_type)
 
-    # Execute with pagination
+    # Apply recency filter
+    if cutoff_date:
+        query = query.where(Post.created_at >= cutoff_date)
+
+    # Final ordering and pagination
     result = await session.execute(
-        query.offset(offset).limit(limit)
+        query.order_by(Post.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
-    
+
     return result.all()
 
 async def get_post(
@@ -224,9 +235,12 @@ async def get_post(
 ) -> Optional[Post]:
     """
     Retrieve a single post with visibility enforcement.
-    Post visibility rules
     """
-    query = select(Post).where(Post.id == str(post_id), Post.is_active)
+    query = (
+        select(Post)
+        .where(Post.id == str(post_id))
+        .where(Post.is_active == True)
+    )
 
     if current_user:
         # Restrict access based on visibility
@@ -243,8 +257,7 @@ async def get_post(
         )
 
     result = await session.execute(query)
-    post = result.scalar_one_or_none()
-    return post
+    return result.scalar_one_or_none()
 
 
 async def get_posts_by_user(
@@ -267,7 +280,7 @@ async def get_posts_by_user(
     )
 
     if not include_inactive:
-        query = query.where(Post.is_active)
+        query = query.where(Post.is_active == True)
 
     # Visibility controls
     if current_user and str(current_user.id) != str(user_id):
