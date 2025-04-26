@@ -119,6 +119,8 @@ async def update_profile(
             detail="User not found"
         )
 
+
+
     # Special handling for admin-only fields
     if not current_user.is_admin:
         if user_update.is_admin is not None:
@@ -131,8 +133,16 @@ async def update_profile(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot modify account status"
             )
+    # Validate required fields
+    required_fields = ["full_name", "email", "job_title", "industry", "location", "years_of_experience"]
+    for field in required_fields:
+        if getattr(user_update, field) is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{field} is required"
+            )
 
-    updated_user = await update_user(db, user_id, user_update)
+    updated_user = await update_user(db, user_id, user_update, current_user)
     if not updated_user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

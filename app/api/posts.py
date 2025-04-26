@@ -52,14 +52,14 @@ async def create_new_post(
     - industry: Required for job posts
     """
     # Validate job posts have industry specified
-    if post_in.post_type == PostType.JOB and not post_in.industry:
+    if post_in.post_type == PostType.JOB_POSTING and not post_in.industry:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Job posts must specify an industry"
         )
     
     try:
-        return await create_post(db, post_in, current_user.id)
+        return await create_post(db, post_in, current_user)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -104,7 +104,8 @@ async def read_feed(
     
     posts = await get_feed_posts(
         db,
-        user_industries=[current_user.industry] if current_user.industry else None,
+        current_user=current_user,
+        industries=[current_user.industry] if current_user.industry else None,
         post_type=post_type,
         cutoff_date=cutoff_date,
         offset=offset,
@@ -116,26 +117,51 @@ async def read_feed(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No posts found matching your criteria"
         )
-    return posts
+
+    # Convert SQLAlchemy models to Pydantic models
+    return [
+        PostRead.model_validate(post, from_attributes=True)
+        for post, _ in posts
+    ]
 
 @router.post("/search", response_model=List[PostRead])
-async def search_posts_endpoint(
+async def search_posts(
     search_params: PostSearch,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Advanced post search with multiple filters
     Supports searching by keywords, industries, post types, etc.
     """
-    posts = await search_posts(db, search_params, offset, limit)
+    posts = await search_posts(
+        db,
+        current_user=current_user,
+        search_params=search_params,
+        offset=offset,
+        limit=limit
+    )
     if not posts:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No posts found matching your criteria"
         )
-    return posts
+    return [
+        PostRead(
+            id=post.id,
+            title=post.title,
+            content=post.content,
+            post_type=post.post_type,
+            industry=post.industry,
+            is_active=post.is_active,
+            created_at=post.created_at,
+            updated_at=post.updated_at,
+            user=user
+        )
+        for post, user in posts
+    ]
 
 @router.get("/user/{user_id}", response_model=List[PostRead])
 async def read_user_posts(
