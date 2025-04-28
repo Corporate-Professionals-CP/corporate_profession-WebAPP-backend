@@ -30,6 +30,7 @@ class UserBase(SQLModel):
     """Base fields shared across all user schemas"""
     full_name: str = Field(..., min_length=2, max_length=100)
     email: Optional[str] = Field(None, regex=r"^[^@]+@[^@]+\.[^@]+$")
+    username: Optional[str] = Field(None, min_length=3, max_length=50, regex=r"^[a-zA-Z0-9_]+$")
     phone: Optional[str] = Field(None, regex=r"^\+?[\d\s-]{10,15}$")
     company: str = Field(..., min_length=2, max_length=100)
     job_title: str = Field(..., min_length=2, max_length=100)

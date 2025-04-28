@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 from app.schemas.user import UserPublic
 from app.schemas.enums import Industry, PostType
+from pydantic import validator
 
 
 class PostBase(BaseModel):
@@ -19,10 +20,21 @@ class PostBase(BaseModel):
     post_type: PostType
     industry: Optional[Industry] = None
     tags: List[str] = Field(default_factory=list)
+    expires_at: Optional[datetime] = None
+
+    class Config:
+        use_enum_values = True
 
 class PostCreate(PostBase):
     """Schema for post creation requests"""
-    pass
+    @validator('expires_at')
+    def validate_expires_at(cls, v, values):
+        if values.get('post_type') == PostType.JOB_POSTING:
+            if v is None:
+                raise ValueError("Job posts must have an expiration date")
+            if v <= datetime.utcnow():
+                raise ValueError("Expiration date must be in the future")
+        return v
 
 class PostUpdate(BaseModel):
     """Schema for post updates (all fields optional)"""
@@ -30,6 +42,7 @@ class PostUpdate(BaseModel):
     content: Optional[str] = Field(None, min_length=10, max_length=2000)
     post_type: Optional[PostType] = None
     industry: Optional[Industry] = None
+    expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
 
 class PostRead(PostBase):
@@ -42,6 +55,9 @@ class PostRead(PostBase):
     published_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
 
+    class Config:
+        from_attributes = True
+
 class PostSearch(BaseModel):
     """Schema for post search/filter parameters"""
     query: Optional[str] = Field(None, description="Search by keywords in title/content")
@@ -50,6 +66,11 @@ class PostSearch(BaseModel):
     created_after: Optional[datetime] = Field(
         None, 
         description="Filter posts created after this date"
+    )
+
+    end_date: Optional[datetime] = Field( 
+        None,
+        description="Filter posts created before this date"
     )
     limit: int = Field(100, ge=1, le=1000, description="Pagination limit")
     offset: int = Field(0, ge=0, description="Pagination offset")
@@ -66,5 +87,3 @@ class PostSearch(BaseModel):
             }
         }
 
-    class Config:
-        from_attributes = True

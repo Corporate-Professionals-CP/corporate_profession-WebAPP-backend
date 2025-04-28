@@ -5,13 +5,15 @@ References:
 - Admin Panel
 """
 
-from typing import Optional, Dict, List, TYPE_CHECKING
+from typing import Optional, Dict, List, TYPE_CHECKING, ClassVar
 import uuid
 from datetime import datetime
 from enum import Enum
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy import and_, or_
 
-from sqlalchemy import JSON
-from sqlalchemy.orm import Mapped
+from sqlalchemy import Column, Enum as PgEnum, JSON
+from sqlalchemy.orm import Mapped, relationship
 from sqlmodel import SQLModel, Field, Relationship
 from pydantic import validator
 
@@ -48,12 +50,19 @@ class Post(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     title: str = Field(..., min_length=5, max_length=100)
     content: str = Field(..., min_length=10, max_length=5000)
-    post_type: PostType
+    post_type: PostType = Field(
+        sa_column=Column(
+            PgEnum(PostType, values_callable=lambda enum_cls: [e.value for e in enum_cls], name="posttype"),
+            nullable=False
+        )
+    )
     industry: Optional[Industry] = Field(default=None, index=True)
 
     status: PostStatus = Field(default=PostStatus.PUBLISHED)
     visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
     is_promoted: bool = Field(default=False)
+    is_active: ClassVar[hybrid_property]
+    deleted: bool = Field(default=False) # using for the soft delete
 
     tags: List[str] = Field(default_factory=list, sa_type=JSON)
     engagement: Dict[str, int] = Field(
@@ -70,7 +79,8 @@ class Post(SQLModel, table=True):
     expires_at: Optional[datetime] = None
 
     user_id: str = Field(foreign_key="user.id", nullable=False)
-    user: Mapped[Optional["User"]] = Relationship(back_populates="posts")
+    user: Mapped["User"] = Relationship(
+        back_populates="posts")
 
     @validator('expires_at')
     def validate_expiry(cls, v, values):
@@ -79,11 +89,20 @@ class Post(SQLModel, table=True):
                 raise ValueError("Job post must expire in the future")
         return v
 
-    @property
+    @hybrid_property
     def is_active(self) -> bool:
+        """ active status calculation"""
         return (
             self.status == PostStatus.PUBLISHED and
             (self.expires_at is None or self.expires_at > datetime.utcnow())
+        )
+    
+    @is_active.expression
+    def is_active(cls):
+        """SQL implementation for queries"""
+        return and_(
+            cls.status == PostStatus.PUBLISHED,
+            or_(cls.expires_at.is_(None), cls.expires_at > datetime.utcnow())
         )
 
     @property

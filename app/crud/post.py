@@ -12,12 +12,13 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from fastapi import HTTPException, status
-
+import sqlalchemy
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
 from app.models.user import User
 from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead
 from app.schemas.enums import Industry, PostType
 from app.core.security import get_current_active_user
+from sqlalchemy.orm import selectinload
 
 async def create_post(
     session: AsyncSession,
@@ -25,38 +26,50 @@ async def create_post(
     current_user: User
 ) -> Post:
     """
-    Create new post with validation and user association
-    Any user can create posts
+    Optimized post creation with enhanced validation and error handling
     """
-    # Validate job posts
+    # Create dictionary of post data for cleaner manipulation
+    post_dict = post_data.dict(exclude_unset=True, exclude={"tags"})
+    
+    # Handle job post specific validations
     if post_data.post_type == PostType.JOB_POSTING:
         if not post_data.industry:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Job posts must specify an industry"
             )
-        if not post_data.expires_at:
-            post_data.expires_at = datetime.utcnow() + timedelta(days=30)
+        post_dict.setdefault("expires_at", datetime.utcnow() + timedelta(days=30))
 
+    # Create post instance with all required fields
     db_post = Post(
-        **post_data.dict(exclude={"tags"}),
+        **post_dict,
         user_id=str(current_user.id),
-        tags=post_data.tags,
-        engagement={"view_count": 0, "share_count": 0, "bookmark_count": 0},
+        tags=post_data.tags or [],
+        engagement=PostEngagement().dict(),
         status=PostStatus.PUBLISHED,
-        published_at=datetime.utcnow()
+        published_at=datetime.utcnow(),
+        updated_at=datetime.utcnow() 
     )
 
     try:
-        session.add(db_post)
-        await session.commit()
-        await session.refresh(db_post)
-
-        await session.refresh(db_post, ['user'])
-
-        return db_post
+        async with session.begin():
+            session.add(db_post)
+            await session.flush()
+            await session.refresh(db_post, ["user"])
+            
+            # Increment user's post count if needed
+            if hasattr(db_post.user, 'post_count'):
+                db_post.user.post_count += 1
+                session.add(db_post.user)
+            
+            return db_post
+            
+    except sqlalchemy.exc.IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Database integrity error occurred"
+        )
     except Exception as e:
-        await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create post: {str(e)}"
@@ -139,22 +152,30 @@ async def delete_post(
     current_user: User
 ) -> bool:
     """
-    Soft delete post with authorization checks
-    Admin privileges
+    Soft delete post using deleted flag (respects ClassVar is_active)
     """
-    db_post = await get_post_with_user(session, post_id)
-    post, author = db_post
+    # First retrive the post with author
+    result = await session.execute(
+        select(Post)
+        .options(selectinload(Post.user))
+        .where(Post.id == str(post_id))
+    )
+    post = result.scalar_one_or_none()
 
-    if str(author.id) != str(current_user.id) and not current_user.is_admin:
+    if not post:
+        return False
+
+    # Authorization check
+    if str(post.user.id) != str(current_user.id) and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this post"
         )
 
-    post.is_active = False
-    post.updated_at = datetime.utcnow()
-
+    # Perform soft delete - only modify the deleted flag
     try:
+        post.deleted = True 
+        post.updated_at = datetime.utcnow()
         session.add(post)
         await session.commit()
         return True
@@ -164,6 +185,7 @@ async def delete_post(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete post: {str(e)}"
         )
+
 
 async def get_feed_posts(
     session: AsyncSession,
@@ -185,6 +207,7 @@ async def get_feed_posts(
         .join(User)
         .where(Post.status == PostStatus.PUBLISHED)
         .where(Post.is_active == True)
+        .where(Post.deleted == False)
         .where(
             or_(
                 Post.expires_at.is_(None),
@@ -238,6 +261,8 @@ async def get_post(
     """
     query = (
         select(Post)
+        .options(selectinload(Post.user))
+        .where(Post.deleted == False)
         .where(Post.id == str(post_id))
         .where(Post.is_active == True)
     )
@@ -259,6 +284,14 @@ async def get_post(
     result = await session.execute(query)
     return result.scalar_one_or_none()
 
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+    
+    return post
+
 
 async def get_posts_by_user(
     session: AsyncSession,
@@ -268,13 +301,15 @@ async def get_posts_by_user(
     current_user: Optional[User] = None,
     offset: int = 0,
     limit: int = 100
-) -> List[Tuple[Post, User]]:
+) -> List[Post]:
     """
     Get user's posts with visibility controls
     Profile visibility
     """
     query = (
         select(Post, User)
+        .options(selectinload(Post.user))
+        .where(Post.deleted == False)
         .join(User)
         .where(User.id == str(user_id))
     )
@@ -300,7 +335,7 @@ async def get_posts_by_user(
         .limit(limit)
     )
     
-    return result.all()
+    return result.scalars().all()
 
 async def search_posts(
     session: AsyncSession,
@@ -325,12 +360,13 @@ async def search_posts(
 
     # Keyword search
     if query:
-        query_stmt = query_stmt.where(
-            or_(
-                Post.title.ilike(f"%{query}%"),
-                Post.content.ilike(f"%{query}%")
-            )
-        )
+        search_terms = query.split()
+        conditions = []
+        for term in search_terms:
+            term_pattern = f"%{term}%"
+            conditions.append(Post.title.ilike(term_pattern))
+            conditions.append(Post.content.ilike(term_pattern))
+        query_stmt = query_stmt.where(or_(*conditions)) 
 
     # Industry filter
     if industry:
@@ -365,7 +401,14 @@ async def search_posts(
         .limit(limit)
     )
 
-    return result.all()
+    posts = result.all()
+    if not posts:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No posts found matching your criteria"
+        )
+
+    return posts
 
 async def increment_post_engagement(
     session: AsyncSession,
