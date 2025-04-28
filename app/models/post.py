@@ -16,9 +16,10 @@ from sqlalchemy import Column, Enum as PgEnum, JSON
 from sqlalchemy.orm import Mapped, relationship
 from sqlmodel import SQLModel, Field, Relationship
 from pydantic import validator
+from app.models.skill import Skill, PostSkill
 
 # Import enums
-from app.schemas.enums import Industry, PostType, PostVisibility
+from app.schemas.enums import Industry, PostType, PostVisibility, ExperienceLevel
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -57,6 +58,7 @@ class Post(SQLModel, table=True):
         )
     )
     industry: Optional[Industry] = Field(default=None, index=True)
+    experience_level: Optional[ExperienceLevel] = Field(default=None)
 
     status: PostStatus = Field(default=PostStatus.PUBLISHED)
     visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
@@ -81,6 +83,12 @@ class Post(SQLModel, table=True):
     user_id: str = Field(foreign_key="user.id", nullable=False)
     user: Mapped["User"] = Relationship(
         back_populates="posts")
+
+    skills: Mapped[List["Skill"]] = Relationship(
+    back_populates="posts",
+    link_model=PostSkill)
+
+
 
     @validator('expires_at')
     def validate_expiry(cls, v, values):

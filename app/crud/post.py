@@ -16,7 +16,7 @@ import sqlalchemy
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
 from app.models.user import User
 from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead
-from app.schemas.enums import Industry, PostType
+from app.schemas.enums import Industry, PostType, JobTitle
 from app.core.security import get_current_active_user
 from sqlalchemy.orm import selectinload
 
@@ -34,9 +34,10 @@ async def create_post(
     # Handle job post specific validations
     if post_data.post_type == PostType.JOB_POSTING:
         if not post_data.industry:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Job posts must specify an industry"
+            if not post_data.job_title:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Job posts must specify an industry"
             )
         post_dict.setdefault("expires_at", datetime.utcnow() + timedelta(days=30))
 
@@ -122,7 +123,8 @@ async def update_post(
     # Job post validation
     if (post.post_type == PostType.JOB_POSTING and 
         post_update.industry is None and 
-        post.industry is None):
+        post.industry is None and
+        post.job_title is None):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Job posts must maintain industry specification"
@@ -154,6 +156,10 @@ async def delete_post(
     """
     Soft delete post using deleted flag (respects ClassVar is_active)
     """
+
+    logger.info(f"User {current_user.id} soft-deleted post {post_id}")
+
+
     # First retrive the post with author
     result = await session.execute(
         select(Post)
@@ -216,7 +222,7 @@ async def get_feed_posts(
         )
     )
 
-    # Apply visibility rules (PRD requirement)
+    # Apply visibility rules
     query = query.where(
         or_(
             # Posts from user's industry
@@ -344,6 +350,7 @@ async def search_posts(
     query: Optional[str] = None,
     industry: Optional[Industry] = None,
     post_type: Optional[PostType] = None,
+    job_title: Optional[JobTitle] = None,
     created_after: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     offset: int = 0,
@@ -371,6 +378,10 @@ async def search_posts(
     # Industry filter
     if industry:
         query_stmt = query_stmt.where(Post.industry == industry)
+
+    # Job Title
+    if job_title:
+        query_smt = query_smt.where(post.job_title == job_title)
 
     # Post type filter
     if post_type:
@@ -409,6 +420,41 @@ async def search_posts(
         )
 
     return posts
+
+async def search_jobs_by_criteria(
+    session: AsyncSession,
+    skill: Optional[str] = None,
+    location: Optional[str] = None,
+    experience: Optional[str] = None,
+    job_title: Optional[str] = None,
+    offset: int = 0,
+    limit: int = 100
+) -> List[Post]:
+    """
+    Search for job postings based on multiple criteria: skill, location, experience, and job title.
+    """
+    stmt = select(Post).where(Post.post_type == PostType.JOB_POSTING)
+
+    # Filter by skill if provided
+    if skill:
+        stmt = stmt.where(Post.skills.any(name=skill))
+
+    # Filter by location if provided
+    if location:
+        stmt = stmt.where(Post.location.ilike(f"%{location}%"))
+
+    # Filter by experience if provided
+    if experience:
+        stmt = stmt.where(Post.experience_level == experience)
+
+    # Filter by job title if provided
+    if job_title:
+        stmt = stmt.where(Post.title.ilike(f"%{job_title}%"))
+
+    stmt = stmt.offset(offset).limit(limit)
+
+    result = await session.execute(stmt)
+    return result.scalars().all()
 
 async def increment_post_engagement(
     session: AsyncSession,

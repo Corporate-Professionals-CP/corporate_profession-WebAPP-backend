@@ -19,6 +19,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserPublic, UserDirectoryItem, UserProfileCompletion
 from app.utils.file_handling import save_uploaded_file, delete_user_file
 from app.models.user import User
+from app.models.skill import Skill
 
 async def create_user(session: AsyncSession, user_data: UserCreate) -> User:
     """
@@ -137,19 +138,22 @@ async def search_users(
     industry: Optional[str] = None,
     experience: Optional[str] = None,
     location: Optional[str] = None,
-    skills: Optional[List[str]] = None,
+    skills: Optional[str] = None,
+    job_title: Optional[str] = None,
     recruiter_only: bool = False,
     hide_hidden: bool = True,
     offset: int = 0,
     limit: int = 100
-) -> List[UserDirectoryItem]:
+) -> List[User]:
     """
-    Advanced user search with filters
-    
+    Advanced user search with filters matching PRD requirements
     """
     stmt = select(User).options(selectinload(User.skills))
-    stmt = select(User).where(User.is_active == True)
+    
+    # Base filter for active users
+    stmt = stmt.where(User.is_active == True)
 
+    # Search query filter
     if query:
         stmt = stmt.where(
             or_(
@@ -160,29 +164,39 @@ async def search_users(
             )
         )
 
+    # Industry filter 
     if industry:
         stmt = stmt.where(User.industry == industry)
 
+    # Experience filter
     if experience:
         stmt = stmt.where(User.years_of_experience == experience)
 
+    # Location filter
     if location:
         stmt = stmt.where(User.location.ilike(f"%{location}%"))
 
-    if skills:
-        stmt = stmt.where(User.skills.contains(skills))
+    # Job title filter
+    if job_title:
+        stmt = stmt.where(User.job_title.ilike(f"%{job_title}%"))
 
+    # Skill filter 
+    if skills:
+        stmt = stmt.join(User.skills).where(Skill.name.ilike(f"%{skills}%"))
+
+    # Recruiter filter 
     if recruiter_only:
         stmt = stmt.where(User.recruiter_tag == True)
 
+    # Privacy filter 
     if hide_hidden:
         stmt = stmt.where(User.hide_profile == False)
 
+    # Pagination
     stmt = stmt.offset(offset).limit(limit)
 
     result = await session.execute(stmt)
-    users = result.scalars().all()
-    return [UserDirectoryItem.from_orm(user) for user in users]
+    return result.scalars().all()
 
 async def bulk_update_users(
     session: AsyncSession,

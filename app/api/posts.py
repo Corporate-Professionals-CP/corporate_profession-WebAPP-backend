@@ -52,7 +52,7 @@ async def create_new_post(
     - industry: Required for job posts
     """
     # Validate job posts have industry specified
-    if post_in.post_type == PostType.JOB_POSTING and not post_in.industry:
+    if post_in.post_type == PostType.JOB_POSTING and not post_in.industry and not post_in.job_title:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Job posts must specify an industry"
@@ -262,7 +262,7 @@ async def update_existing_post(
         )
     
     # Validate job posts maintain industry
-    if post_in.post_type == PostType.JOB_POSTING and not post_in.industry:
+    if post_in.post_type == PostType.JOB_POSTING and not post_in.industry and not post_in.job_title :
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Job posts must specify an industry"

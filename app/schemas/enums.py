@@ -8,7 +8,7 @@ from enum import Enum
 class Industry(str, Enum):
     """
     Industry classification for professionals.
-    PRD Reference: Section 2.2 (Profile fields)
+    Reference: Section Profile fields
     """
     TECHNOLOGY = "Technology"
     FINANCE = "Finance"
@@ -27,7 +27,7 @@ class Industry(str, Enum):
 class ExperienceLevel(str, Enum):
     """
     Professional experience ranges.
-    PRD Reference: Section 2.2 (Years of Experience)
+    Reference: Years of Experience
     """
     ENTRY = "0-2 years"
     MID = "3-5 years"
@@ -41,7 +41,7 @@ class ExperienceLevel(str, Enum):
 class EducationLevel(str, Enum):
     """
     Highest education attainment.
-    PRD Reference: Section 2.2 (Education)
+    Reference: Education
     """
     HIGH_SCHOOL = "High School"
     ASSOCIATE = "Associate Degree"
@@ -89,6 +89,9 @@ class JobTitle(str, Enum):
     Job Title dropdown
     """
     SOFTWARE_ENGINEER = "Software Engineer"
+    BACKEND_DEVELOPER = "Backend Developer"
+    FRONTEND_DEVELOPER = "Frontend Developer"
+    DEVOPS_ENGINEER = "DevOps Engineer"
     PRODUCT_MANAGER = "Product Manager"
     DATA_SCIENTIST = "Data Scientist"
     UX_DESIGNER = "UX Designer"

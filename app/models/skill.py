@@ -18,12 +18,22 @@ class UserSkill(SQLModel, table=True):
     user_id: str = Field(foreign_key="user.id", primary_key=True)
     skill_id: int = Field(foreign_key="skill.id", primary_key=True)
 
+class PostSkill(SQLModel, table=True):
+    """Join table for post-skill many-to-many relationship"""
+    post_id: str = Field(foreign_key="post.id", primary_key=True)
+    skill_id: int = Field(foreign_key="skill.id", primary_key=True)
+
 class Skill(SkillBase, table=True):
     """Skill reference data - simple tag system"""
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    # Relationship to users (Profile skills)
     users: Mapped[List["User"]] = Relationship(
         back_populates="skills",
         link_model=UserSkill
     )
+
+    posts: Mapped[List["Post"]] = Relationship(
+        back_populates="skills",
+        link_model=PostSkill
+    )
+

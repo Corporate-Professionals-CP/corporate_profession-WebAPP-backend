@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 from app.schemas.user import UserPublic
-from app.schemas.enums import Industry, PostType
+from app.schemas.enums import Industry, PostType, ExperienceLevel, JobTitle
 from pydantic import validator
 
 
@@ -19,6 +19,8 @@ class PostBase(BaseModel):
     content: str = Field(..., min_length=10, max_length=2000)
     post_type: PostType
     industry: Optional[Industry] = None
+    experience_level: Optional[ExperienceLevel] = None
+    job_title: Optional[JobTitle] = None
     tags: List[str] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
 
@@ -42,6 +44,8 @@ class PostUpdate(BaseModel):
     content: Optional[str] = Field(None, min_length=10, max_length=2000)
     post_type: Optional[PostType] = None
     industry: Optional[Industry] = None
+    experience_level: Optional[ExperienceLevel] = None
+    job_title: Optional[JobTitle] = None
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
 
@@ -63,6 +67,7 @@ class PostSearch(BaseModel):
     query: Optional[str] = Field(None, description="Search by keywords in title/content")
     industry: Optional[Industry] = None
     post_type: Optional[PostType] = None
+    job_title: Optional[JobTitle] = None
     created_after: Optional[datetime] = Field(
         None, 
         description="Filter posts created after this date"
