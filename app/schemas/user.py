@@ -5,26 +5,30 @@ from app.schemas.enums import (
     Industry,
     ExperienceLevel,
     Gender,
-    ProfileVisibility
+    ProfileVisibility,
+    Location,
+    JobTitle,
+    EducationLevel
 )
 
 class UserBase(BaseModel):
-    full_name: str = Field(..., min_length=2, max_length=100)
+    full_name: Optional[str] = Field(..., min_length=2, max_length=100)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, pattern=r"^\+?[\d\s-]{10,15}$")
-    username: Optional[str] = Field(None, min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
-    company: str = Field(..., min_length=2, max_length=100)
-    job_title: str = Field(..., min_length=2, max_length=100)
-    bio: Optional[str] = Field(None, max_length=500)
+    username: Optional[str] = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
+    company: Optional[str] = Field(None, min_length=2, max_length=100)
+    job_title: Optional[JobTitle] = Field(None, min_length=2, max_length=100)
+    industry: Optional[Industry] = None
+    years_of_experience: Optional[ExperienceLevel] = None
+    location: Optional[Location] = None
+    education: Optional[EducationLevel] = None
+    recruiter_tag: Optional[bool] = False
 
 class UserCreate(UserBase):
+
     password: SecretStr = Field(..., min_length=8)
     password_confirmation: SecretStr
-    industry: Industry
-    years_of_experience: ExperienceLevel
-    location: str
-    education: str
-    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
+
 
     @validator('password')
     def validate_password(cls, v: SecretStr):
@@ -56,12 +60,12 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     username: Optional[str] = None
     company: Optional[str] = None
-    job_title: Optional[str] = None
+    job_title: Optional[JobTitle] = None
     bio: Optional[str] = None
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
-    location: Optional[str] = None
-    education: Optional[str] = None
+    location: Optional[Location] = None
+    education: Optional[EducationLevel] = None
     age: Optional[int] = None
     sex: Optional[Gender] = None
     certifications: Optional[str] = None
@@ -73,10 +77,10 @@ class UserUpdate(BaseModel):
 
 class UserPublic(UserBase):
     id: str
-    industry: Industry
-    years_of_experience: ExperienceLevel
-    location: str
-    education: str
+    industry: Optional[Industry]
+    years_of_experience: Optional[ExperienceLevel]
+    location: Optional[Location]
+    education: Optional[EducationLevel]
     skills: List[str] = Field(default_factory=list)
     profile_completion: float = Field(0.0)  # Default value
     created_at: datetime
@@ -106,10 +110,10 @@ class UserRead(UserPublic):
 
 class UserDirectoryItem(BaseModel):
     id: str
-    full_name: str
-    job_title: str
-    company: str
-    industry: Industry
+    full_name: Optional[str]
+    job_title: Optional[JobTitle]
+    company: Optional[str]
+    industry: Optional[Industry]
     skills: List[str] = Field(default_factory=list)
 
 

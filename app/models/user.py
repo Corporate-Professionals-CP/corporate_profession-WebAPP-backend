@@ -12,7 +12,9 @@ from app.schemas.enums import (
     ExperienceLevel,
     Gender,
     ProfileVisibility,
-    EducationLevel
+    EducationLevel,
+    Location,
+    JobTitle
 )
 
 # Password hashing configuration
@@ -32,18 +34,24 @@ class UserBase(SQLModel):
     email: Optional[str] = Field(None, regex=r"^[^@]+@[^@]+\.[^@]+$")
     username: Optional[str] = Field(None, min_length=3, max_length=50, regex=r"^[a-zA-Z0-9_]+$")
     phone: Optional[str] = Field(None, regex=r"^\+?[\d\s-]{10,15}$")
-    company: str = Field(..., min_length=2, max_length=100)
-    job_title: str = Field(..., min_length=2, max_length=100)
     bio: Optional[str] = Field(None, max_length=500)
+    company: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    job_title: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    industry: Optional[Industry] = Field(default=None)
+    years_of_experience: Optional[ExperienceLevel] = Field(default=None)
+    location: Optional[Location] = Field(default=None, min_length=2, max_length=100)
+    education: Optional[EducationLevel] = Field(default=None)
 
 
 class User(UserBase, table=True):
     """Complete user model with all requirements"""
     id: str = Field(default_factory=generate_uuid, primary_key=True)
-    industry: Industry
-    years_of_experience: ExperienceLevel
-    location: str = Field(..., min_length=2, max_length=100)
-    education: EducationLevel
+
+    industry: Optional[Industry] = Field(default=None, nullable=True)
+    years_of_experience: Optional[ExperienceLevel] = Field(default=None, nullable=True)
+    location: Optional[Location] = Field(default=None, nullable=True)
+    education: Optional[EducationLevel] = Field(default=None, nullable=True)
+
 
 
     skills: List["Skill"] = Relationship(

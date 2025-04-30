@@ -33,10 +33,10 @@ router = APIRouter(
 
 
 class DropdownUpdate(BaseModel):
-    job_titles: Optional[List[str]] = None
-    industries: Optional[List[str]] = None
+    job_titles: Optional[List[JobTitle]] = None
+    industries: Optional[List[Industry]] = None
     skills: Optional[List[str]] = None
-    experience_levels: Optional[List[str]] = None
+    experience_levels: Optional[List[ExperienceLevel]] = None
 
 class AdminMetrics(BaseModel):
     total_users: int
@@ -53,8 +53,8 @@ class UserSearchFilters(BaseModel):
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
     recruiter_tag: Optional[bool] = None
-    industry: Optional[str] = None
-    experience_level: Optional[str] = None
+    industry: Optional[Industry] = None
+    experience_level: Optional[ExperienceLevel] = None
 
 class BulkActionRequest(BaseModel):
     user_ids: List[UUID]
@@ -68,7 +68,7 @@ async def admin_list_users(
     limit: int = 100,
     db: AsyncSession = Depends(get_db)
 ):
-    """List users with advanced filters (PRD section 2.8)"""
+    """List users with advanced filters """
     users = await crud_user.get_filtered_users(
         db,
         is_active=filters.is_active,
@@ -87,35 +87,18 @@ async def bulk_user_actions(
     db: AsyncSession = Depends(get_db)
 ):
     """Bulk user actions (activate/deactivate/verify)"""
-    results = {"processed": 0, "success": 0}
-    
-    for user_id in request.user_ids:
-        user = await crud_user.get(db, user_id)
-        if not user:
-            continue
-        
-        results["processed"] += 1
-        
-        update_data = {}
-        if request.action == "activate":
-            update_data["is_active"] = True
-        elif request.action == "deactivate":
-            update_data["is_active"] = False
-        elif request.action == "verify":
-            update_data["is_verified"] = True
-            
-        if update_data:
-            await crud_user.update(db, db_obj=user, obj_in=update_data)
-            results["success"] += 1
-    
-    return results
+    return await crud_user.bulk_user_actions(
+        db,
+        user_ids=request.user_ids,
+        action=request.action
+    )
 
 @router.post("/users/{user_id}/deactivate", response_model=UserRead)
 async def deactivate_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """Deactivate a user account (PRD section 4.5)"""
+    """Deactivate a user account"""
     user = await crud_user.get(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -138,7 +121,7 @@ async def admin_update_user(
     user_update: UserUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Admin edit user profile (PRD section 2.2)"""
+    """Admin edit user profile """
     user = await crud_user.get(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -169,7 +152,7 @@ async def toggle_post_visibility(
     is_active: bool = Body(..., embed=True),
     db: AsyncSession = Depends(get_db)
 ):
-    """Toggle post visibility (PRD section 2.7)"""
+    """Toggle post visibility """
     post = await crud_post.get(db, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -201,7 +184,7 @@ async def get_dropdown_options(db: AsyncSession = Depends(get_db)):
 
 @router.get("/metrics", response_model=AdminMetrics)
 async def get_admin_metrics(db: AsyncSession = Depends(get_db)):
-    """Get system metrics (PRD section 5)"""
+    """Get system metrics """
     users = await crud_user.get_multi(db)
     posts = await crud_post.get_multi(db)
     now = datetime.utcnow()

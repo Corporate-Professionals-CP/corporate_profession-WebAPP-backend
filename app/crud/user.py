@@ -16,10 +16,24 @@ from fastapi import HTTPException, status, UploadFile
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session, selectinload
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate, UserPublic, UserDirectoryItem, UserProfileCompletion
 from app.utils.file_handling import save_uploaded_file, delete_user_file
 from app.models.user import User
 from app.models.skill import Skill
+from app.schemas.user import (
+    UserCreate,
+    UserUpdate,
+    UserPublic,
+    UserDirectoryItem,
+    UserProfileCompletion
+)
+
+from app.schemas.enums import (
+    Location,
+    Industry,
+    ExperienceLevel,
+    JobTitle,
+)
+
 
 async def create_user(session: AsyncSession, user_data: UserCreate) -> User:
     """
@@ -56,9 +70,14 @@ async def get_user_by_id(session: AsyncSession, user_id: UUID) -> Optional[User]
     result = await session.execute(
         select(User)
         .options(selectinload(User.skills))
-        .where(User.id == str (user_id)) # convert to string
+        .where(User.id == str (user_id))
     )
     return result.scalars().first()
+
+
+async def get(session: AsyncSession, user_id: UUID) -> Optional[User]:
+    """Get user by ID (alias for get_user_by_id)"""
+    return await get_user_by_id(session, user_id)
 
 async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]:
     """Case-insensitive email lookup"""
@@ -135,11 +154,11 @@ async def search_users(
     session: AsyncSession,
     *,
     query: Optional[str] = None,
-    industry: Optional[str] = None,
-    experience: Optional[str] = None,
-    location: Optional[str] = None,
+    industry: Optional[Industry] = None,
+    experience: Optional[ExperienceLevel] = None,
+    location: Optional[Location] = None,
     skills: Optional[str] = None,
-    job_title: Optional[str] = None,
+    job_title: Optional[JobTitle] = None,
     recruiter_only: bool = False,
     hide_hidden: bool = True,
     offset: int = 0,
@@ -198,23 +217,81 @@ async def search_users(
     result = await session.execute(stmt)
     return result.scalars().all()
 
-async def bulk_update_users(
+async def bulk_user_actions(
     session: AsyncSession,
     user_ids: List[UUID],
-    update_data: Dict[str, Any]
-) -> int:
+    action: str
+) -> Dict[str, int]:
     """
-    Bulk update users (admin only)
-   
+    Handle bulk user actions (activate/deactivate/verify)
+    Returns counts of processed and successful operations
+    Admin Panel and Security & Privacy
     """
-    result = await session.execute(
-        update(User)
-        .where(User.id.in_(user_ids))
-        .values(update_data)
-        .execution_options(synchronize_session="fetch")
-    )
+    results = {"processed": 0, "success": 0}
+    update_data = {}
+
+    # Set update data based on action
+    if action == "activate":
+        update_data["is_active"] = True
+    elif action == "deactivate":
+        update_data["is_active"] = False
+    elif action == "verify":
+        update_data["is_verified"] = True
+    else:
+        return results  # Invalid action
+
+    for user_id in user_ids:
+        try:
+            user = await get(session, user_id)
+            if user:
+                for key, value in update_data.items():
+                    setattr(user, key, value)
+                session.add(user)
+                results["processed"] += 1
+                results["success"] += 1
+        except Exception:
+            results["processed"] += 1
+            continue
+
     await session.commit()
-    return result.rowcount
+    return results
+
+async def get_filtered_users(
+    session: AsyncSession,
+    *,
+    is_active: Optional[bool] = None,
+    is_verified: Optional[bool] = None,
+    recruiter_tag: Optional[bool] = None,
+    industry: Optional[Industry] = None,
+    experience_level: Optional[ExperienceLevel] = None,
+    skip: int = 0,
+    limit: int = 100
+) -> List[UserDirectoryItem]:
+    """
+    Get filtered users for admin panel with advanced filtering capabilities
+    Matching requirements for admin user management
+    """
+    stmt = select(User).options(selectinload(User.skills))
+
+    # Apply filters
+    if is_active is not None:
+        stmt = stmt.where(User.is_active == is_active)
+    if is_verified is not None:
+        stmt = stmt.where(User.is_verified == is_verified)
+    if recruiter_tag is not None:
+        stmt = stmt.where(User.recruiter_tag == recruiter_tag)
+    if industry is not None:
+        stmt = stmt.where(User.industry == industry)
+    if experience_level is not None:
+        stmt = stmt.where(User.years_of_experience == experience_level)
+
+    # Apply pagination
+    stmt = stmt.offset(skip).limit(limit)
+
+    result = await session.execute(stmt)
+    users = result.scalars().all()
+    
+    return [UserDirectoryItem.from_orm(user) for user in users]
 
 async def toggle_profile_visibility(
     session: AsyncSession,
@@ -308,7 +385,7 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
         'phone': 5,
         'certifications': 5,
         'linkedin_profile': 5,
-        'cv_url': 5  # Required but gets special handling
+        'cv_url': 5
     }
 
     completion = {
