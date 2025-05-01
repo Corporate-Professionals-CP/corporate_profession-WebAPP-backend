@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 from app.schemas.user import UserPublic
-from app.schemas.enums import Industry, PostType, ExperienceLevel, JobTitle
+from app.schemas.enums import Industry, PostType, ExperienceLevel, JobTitle, PostVisibility
 from pydantic import validator
 
 
@@ -19,6 +19,7 @@ class PostBase(BaseModel):
     content: str = Field(..., min_length=10, max_length=2000)
     post_type: PostType
     industry: Optional[Industry] = None
+    visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
     experience_level: Optional[ExperienceLevel] = None
     job_title: Optional[JobTitle] = None
     tags: List[str] = Field(default_factory=list)
@@ -46,6 +47,7 @@ class PostUpdate(BaseModel):
     industry: Optional[Industry] = None
     experience_level: Optional[ExperienceLevel] = None
     job_title: Optional[JobTitle] = None
+    visibility: Optional[PostVisibility] = None
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
 

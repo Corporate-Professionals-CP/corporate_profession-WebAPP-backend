@@ -16,7 +16,7 @@ import sqlalchemy
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
 from app.models.user import User
 from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead
-from app.schemas.enums import Industry, PostType, JobTitle
+from app.schemas.enums import Industry, PostType, JobTitle, PostVisibility
 from app.core.security import get_current_active_user
 from sqlalchemy.orm import selectinload
 
@@ -322,6 +322,18 @@ async def get_post(
     
     return post
 
+async def get_post_by_id_admin(
+    session: AsyncSession,
+    post_id: UUID
+) -> Optional[Post]:
+    """Admin version - gets post without visibility checks"""
+    result = await session.execute(
+        select(Post)
+        .options(selectinload(Post.user))
+        .where(Post.id == str(post_id))
+        .where(Post.deleted == False)  # Only non deleted post 
+    )
+    return result.scalar_one_or_none()
 
 async def get_posts_by_user(
     session: AsyncSession,

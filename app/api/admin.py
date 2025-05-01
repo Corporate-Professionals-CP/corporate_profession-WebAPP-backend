@@ -18,9 +18,9 @@ from app.db.database import get_db
 from app.models.user import User
 from app.models.post import Post
 from app.schemas.user import UserRead, UserUpdate, UserDirectoryItem
-from app.schemas.post import PostRead
+from app.schemas.post import PostRead, PostUpdate
 from app.core.security import get_current_active_admin
-from app.schemas.enums import Industry, ExperienceLevel, JobTitle
+from app.schemas.enums import Industry, ExperienceLevel, JobTitle, PostVisibility
 from app.crud import (
     user as crud_user,
     post as crud_post,
@@ -178,28 +178,47 @@ async def admin_list_posts(
     )
 
 @router.patch("/posts/{post_id}/visibility", response_model=PostRead)
-async def toggle_post_visibility(
+async def admin_update_post_visibility(
     post_id: UUID,
-    is_active: bool = Body(..., embed=True),
-    db: AsyncSession = Depends(get_db)
+    visibility: PostVisibility = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_active_admin)
 ):
-    """Toggle post visibility """
-    post = await crud_post.get_user_by_id(db, post_id)
+    post = await crud_post.get_post_by_id_admin(db, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    return await crud_post.update(db, db_obj=post, obj_in={"is_active": is_active})
 
-@router.delete("/posts/{post_id}")
+    post.visibility = visibility.value
+    post.updated_at = datetime.utcnow()
+    
+    try:
+        await db.commit()
+        await db.refresh(post)
+        return post
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating post: {str(e)}")
+
+
+@router.delete("/posts/{post_id}", status_code=204)
 async def admin_delete_post(
     post_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_active_admin)
 ):
-    """Permanently delete a post"""
-    post = await crud_post.get_user_by_id(db, post_id)
+    """Admin-only post deletion (soft delete)"""
+    post = await crud_post.get_post_by_id_admin(db, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    await crud_post.remove(db, id=post_id)
-    return {"message": "Post deleted successfully"}
+
+    try:
+        # Perform soft delete
+        post.deleted = True
+        post.updated_at = datetime.utcnow()
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting post: {str(e)}")
 
 
 @router.get("/dropdowns", response_model=DropdownUpdate)
@@ -209,7 +228,7 @@ async def get_dropdown_options(db: AsyncSession = Depends(get_db)):
         "industries": Industry.list(),  # Enum-based
         "experience_levels": ExperienceLevel.list(), # Enum-based
         "job_titles": JobTitle.list(),  # Enum-based
-        "skills": await crud_skill.get_all(db)  # From model
+        "skills": await crud_skill.get_multi(db)  # From model
     }
 
 
