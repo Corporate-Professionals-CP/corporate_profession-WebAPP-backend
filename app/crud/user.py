@@ -7,8 +7,9 @@ Complete user CRUD operations covering all requirements:
 - GDPR compliance
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
+import sqlalchemy
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, or_
 from sqlalchemy.exc import IntegrityError
@@ -70,7 +71,7 @@ async def get_user_by_id(session: AsyncSession, user_id: UUID) -> Optional[User]
     result = await session.execute(
         select(User)
         .options(selectinload(User.skills))
-        .where(User.id == str (user_id))
+        .where(User.id == str(user_id))
     )
     return result.scalars().first()
 
@@ -148,6 +149,61 @@ async def update_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Database error: {str(e)}"
+        )
+
+
+async def get_user_for_update(
+    session: AsyncSession, 
+    user_id: UUID
+) -> Optional[User]:
+    result = await session.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .with_for_update()
+    )
+    return result.scalars().first()
+
+async def update_user_status(
+    session: AsyncSession,
+    user_id: UUID,
+    is_active: bool,
+    current_user: User
+) -> User:
+    try:
+        # Convert UUID to string for database compatibility
+        user_str_id = str(user_id)
+        
+        # Get and lock user record
+        result = await session.execute(
+            select(User)
+            .where(User.id == user_str_id)
+            .with_for_update()
+        )
+        user = result.scalars().first()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Admin privileges required")
+
+        # Perform update
+        user.is_active = is_active
+        await session.commit()
+        return user
+
+    except SQLAlchemyError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
         )
 
 async def search_users(

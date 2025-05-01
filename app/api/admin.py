@@ -7,6 +7,7 @@ Admin endpoints covering all requirements:
 - System configuration
 """
 
+import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 from app.db.database import get_db
 from app.models.user import User
+from app.models.post import Post
 from app.schemas.user import UserRead, UserUpdate, UserDirectoryItem
 from app.schemas.post import PostRead
 from app.core.security import get_current_active_admin
@@ -86,65 +88,94 @@ async def bulk_user_actions(
     request: BulkActionRequest,
     db: AsyncSession = Depends(get_db)
 ):
+
     """Bulk user actions (activate/deactivate/verify)"""
     return await crud_user.bulk_user_actions(
         db,
         user_ids=request.user_ids,
         action=request.action
-    )
+        )
 
 @router.post("/users/{user_id}/deactivate", response_model=UserRead)
 async def deactivate_user(
     user_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_active_admin)
 ):
-    """Deactivate a user account"""
-    user = await crud_user.get(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return await crud_user.update(db, db_obj=user, obj_in={"is_active": False})
+    try:
+        return await crud_user.update_user_status(
+            session=db,
+            user_id=user_id,
+            is_active=False,
+            current_user=current_admin
+        )
+    except HTTPException as he:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Deactivation failed: {str(e)}"
+        )
 
 @router.post("/users/{user_id}/activate", response_model=UserRead)
 async def activate_user(
     user_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_active_admin)
 ):
-    """Reactivate a user account"""
-    user = await crud_user.get(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return await crud_user.update(db, db_obj=user, obj_in={"is_active": True})
+    try:
+        return await crud_user.update_user_status(
+            session=db,
+            user_id=user_id,
+            is_active=True,
+            current_user=current_admin
+        )
+    except HTTPException as he:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Activation failed: {str(e)}"
+        )
 
 @router.put("/users/{user_id}", response_model=UserRead)
 async def admin_update_user(
     user_id: UUID,
     user_update: UserUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_active_admin),
 ):
-    """Admin edit user profile """
-    user = await crud_user.get(db, user_id)
+    # Fetch user (including inactive ones)
+    user = await crud_user.get_user_for_update(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return await crud_user.update(db, db_obj=user, obj_in=user_update)
 
+    # Apply updates directly (skip all validations)
+    update_data = user_update.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(user, field, value)
 
-@router.get("/posts", response_model=List[PostRead])
+    try:
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=f"Database error: {str(e)}")
+
+@router.get("/posts/", response_model=List[PostRead])
 async def admin_list_posts(
-    is_active: Optional[bool] = None,
-    industry: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
-    db: AsyncSession = Depends(get_db)
+    is_active: Optional[bool] = Query(None),
+    industry: Optional[Industry] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_active_admin),
 ):
-    """List posts with moderation filters"""
-    posts = await crud_post.get_filtered_posts(
-        db,
+    return await crud_post.get_filtered_posts(
+        session=db,
         is_active=is_active,
-        industry=industry,
-        skip=skip,
-        limit=limit
+        industry=industry
     )
-    return posts
 
 @router.patch("/posts/{post_id}/visibility", response_model=PostRead)
 async def toggle_post_visibility(
@@ -153,7 +184,7 @@ async def toggle_post_visibility(
     db: AsyncSession = Depends(get_db)
 ):
     """Toggle post visibility """
-    post = await crud_post.get(db, post_id)
+    post = await crud_post.get_user_by_id(db, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     return await crud_post.update(db, db_obj=post, obj_in={"is_active": is_active})
@@ -164,7 +195,7 @@ async def admin_delete_post(
     db: AsyncSession = Depends(get_db)
 ):
     """Permanently delete a post"""
-    post = await crud_post.get(db, post_id)
+    post = await crud_post.get_user_by_id(db, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     await crud_post.remove(db, id=post_id)
@@ -176,7 +207,7 @@ async def get_dropdown_options(db: AsyncSession = Depends(get_db)):
     """Get current dropdown options using enums and skill model"""
     return {
         "industries": Industry.list(),  # Enum-based
-        "experience_levels": ExperienceLevel.list(),  # Enum-based
+        "experience_levels": ExperienceLevel.list(), # Enum-based
         "job_titles": JobTitle.list(),  # Enum-based
         "skills": await crud_skill.get_all(db)  # From model
     }

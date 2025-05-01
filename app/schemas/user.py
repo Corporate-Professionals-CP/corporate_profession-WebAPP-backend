@@ -98,9 +98,9 @@ class UserPublic(UserBase):
         from_attributes = True
 
 class UserRead(UserPublic):
-    is_active: bool
-    is_verified: bool
-    is_admin: bool
+    is_active: Optional[bool] = None
+    is_verified: Optional[bool]
+    is_admin: Optional[bool]
     updated_at: datetime
 
     @classmethod

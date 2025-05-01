@@ -192,6 +192,30 @@ async def delete_post(
             detail=f"Failed to delete post: {str(e)}"
         )
 
+async def get_filtered_posts(
+    session: AsyncSession,
+    *,
+    is_active: Optional[bool] = None,
+    industry: Optional[Industry] = None,
+    offset: int = 0,
+    limit: int = 100
+) -> List[Post]:
+    """
+    Admin-only: Get posts with no visibility/industry restrictions.
+    """
+    query = select(Post).options(selectinload(Post.user))
+
+    if is_active is not None:
+        query = query.where(Post.is_active == is_active)
+    if industry:
+        query = query.where(Post.industry == industry)
+
+    result = await session.execute(
+        query.order_by(Post.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return result.scalars().all()
 
 async def get_feed_posts(
     session: AsyncSession,

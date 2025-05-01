@@ -1,6 +1,8 @@
 """
 Complete authentication endpoints
 """
+
+import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Body, Request
 from fastapi.security import OAuth2PasswordRequestForm
@@ -28,6 +30,25 @@ from app.core.config import settings
 from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id, get_user_by_email_or_username
 from app.core.email import send_verification_email, send_password_reset_email
 
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
+
+
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+handler.setFormatter(formatter)
+
+
+logger.addHandler(handler)
+
+
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # Initialize Google OAuth if configured
@@ -52,12 +73,37 @@ async def login(
 ):
     try:
         user = await get_user_by_email_or_username(db, form_data.username)
-        if not user or not verify_password(form_data.password, user.hashed_password):
+        if not user:
+            logger.warning(f"Login attempt for non-existent user: {form_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email/username or password",
+                detail="Invalid credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        if not verify_password(form_data.password, user.hashed_password):
+            logger.warning(f"Failed login attempt for user: {user.email}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+
+        if not user.is_active:
+            logger.warning(f"Login attempt for deactivated account: {user.email}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account deactivated. Please contact support.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        #if not user.is_verified:
+        #    logger.info(f"Login attempt for unverified account: {user.email}")
+        #    raise HTTPException(
+        #        status_code=status.HTTP_403_FORBIDDEN,
+        #        detail="Account not verified. Please check your email.",
+        #        headers={"WWW-Authenticate": "Bearer"},
+        #    )
 
         scopes = ["user"]
         if user.recruiter_tag:
@@ -138,11 +184,17 @@ async def signup(
 ):
     """Email/password signup"""
     existing_user = await get_user_by_email(db, user_in.email)
-    if existing_user:
+    if existing_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
+
+    else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email was previously registered (account deactivated). Please contact support to reactivate."
+            )
 
     user = await create_user(db, user_in)
     verification_token = create_access_token(
@@ -227,8 +279,11 @@ async def refresh_token(
     try:
         payload = verify_token(refresh_token, expected_type="refresh")
         user = await get_user_by_id(db, payload["sub"])
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated"
+            )
 
         scopes = ["user"]
         if user.recruiter_tag:
