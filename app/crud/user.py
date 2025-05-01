@@ -523,3 +523,23 @@ async def count_users_by_industry(session: AsyncSession) -> Dict[str, int]:
                 counts[industry]["active"] += 1
     
     return counts
+
+async def get_multi(
+    session: AsyncSession,
+    *,
+    skip: int = 0,
+    limit: int = 100,
+    include_inactive: bool = False
+) -> List[User]:
+    """Get multiple users with pagination"""
+    query = select(User).options(selectinload(User.skills))
+
+    if not include_inactive:
+        query = query.where(User.is_active == True)
+
+    result = await session.execute(
+        query.order_by(User.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return result.scalars().all()

@@ -492,6 +492,29 @@ async def search_jobs_by_criteria(
     result = await session.execute(stmt)
     return result.scalars().all()
 
+async def get_multi(
+    session: AsyncSession,
+    *,
+    skip: int = 0,
+    limit: int = 100,
+    include_inactive: bool = False,
+    include_deleted: bool = False
+) -> List[Post]:
+    """Get multiple posts with pagination"""
+    query = select(Post).options(selectinload(Post.user))
+    
+    if not include_inactive:
+        query = query.where(Post.is_active == True)
+    if not include_deleted:
+        query = query.where(Post.deleted == False)
+        
+    result = await session.execute(
+        query.order_by(Post.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return result.scalars().all()
+
 async def increment_post_engagement(
     session: AsyncSession,
     post_id: UUID,

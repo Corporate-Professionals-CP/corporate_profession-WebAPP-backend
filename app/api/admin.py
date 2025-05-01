@@ -234,11 +234,13 @@ async def get_dropdown_options(db: AsyncSession = Depends(get_db)):
 
 @router.get("/metrics", response_model=AdminMetrics)
 async def get_admin_metrics(db: AsyncSession = Depends(get_db)):
-    """Get system metrics """
-    users = await crud_user.get_multi(db)
-    posts = await crud_post.get_multi(db)
-    now = datetime.utcnow()
+    """Get system metrics"""
+    users = await crud_user.get_multi(db, include_inactive=True)
     
+    posts = await crud_post.get_multi(db, include_inactive=True)
+    
+    now = datetime.utcnow()
+
     return {
         "total_users": len(users),
         "active_users": sum(1 for u in users if u.is_active),
@@ -258,6 +260,7 @@ async def get_admin_metrics(db: AsyncSession = Depends(get_db)):
             reverse=True
         )[:5]
     }
+
 
 def calculate_completion_rate(users: List[User]) -> float:
     """Calculate average profile completion rate"""
