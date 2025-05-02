@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import AnyUrl, PostgresDsn, RedisDsn, validator
 from pydantic_settings import BaseSettings
 from typing import Optional, List
+import json
 
 class Settings(BaseSettings):
     # Application Metadata
@@ -39,6 +40,12 @@ class Settings(BaseSettings):
     GOOGLE_JWKS_URL: str
     GOOGLE_ISSUER: str
 
+    # Google Cloud Storage Settings
+    GCS_PROJECT_ID: str
+    GCS_BUCKET_NAME: str
+    GCS_BASE_PATH: str = "cvs"
+    GCS_CREDENTIALS_JSON: Optional[str] = None
+    MAX_CV_SIZE: int = 5 * 1024 * 1024  # 5MB
 
     # Email Service
     MAILJET_API_KEY: str
@@ -67,9 +74,28 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",")]
         return v
 
+    #@validator("GCS_CREDENTIALS_JSON", pre=True)
+    #def validate_gcs_credentials(cls, v):
+    #    try:
+    #        return json.loads(v)
+    #    except json.JSONDecodeError:
+    #        raise ValueError("Invalid GCS credentials JSON format")
+    #    except Exception as e:
+    #        logger.error(f"GCS credentials validation failed: {str(e)}")
+    #
+    #        raise
+
+    @validator("MAX_CV_SIZE")
+    def validate_max_cv_size(cls, v):
+        if v > 10 * 1024 * 1024:  # 10MB max
+            raise ValueError("MAX_CV_SIZE cannot exceed 10MB")
+        return v
+
     class Config:
         env_file = ".env"
         case_sensitive = True
         env_file_encoding = "utf-8"
+        json_loads = json.loads
+        json_dumps = json.dumps
 
 settings = Settings()

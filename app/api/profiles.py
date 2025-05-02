@@ -162,10 +162,11 @@ async def upload_cv(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Upload or update user CV
+    Upload or update user CV to Google Cloud Storage
     - Only owner/admin can upload
     - Supports PDF/DOCX files
-    - Stores securely with access control
+    - Stores in GCS with proper access control
+    - Updates user record with GCS URL
     """
     # Verify ownership or admin rights
     if str(current_user.id) != str(user_id) and not current_user.is_admin:
@@ -175,18 +176,29 @@ async def upload_cv(
         )
 
     try:
-        # Save file and update user record
-        user = await upload_user_cv(db, user_id, file)
+        # Save file to GCS and get the URL
+        cv_url = await save_uploaded_file(file, str(user_id))
+
+        # Update user record with the new CV URL
+        user = await get_user_by_id(db, user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User  not found"
+                detail="User not found"
             )
+
+        user.cv_url = cv_url
+        await db.commit()
+        await db.refresh(user)
+
         return user
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload CV: {str(e)}"
+            detail=f"Failed to upload CV to GCS: {str(e)}"
         )
 
 @router.delete("/{user_id}/cv", status_code=status.HTTP_204_NO_CONTENT)
@@ -196,8 +208,9 @@ async def delete_cv(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Remove user CV
-    Profile management
+    Remove user CV from Google Cloud Storage
+    - Deletes file from GCS bucket
+    - Clears CV URL from user record
     """
     # Verify ownership or admin rights
     if str(current_user.id) != str(user_id) and not current_user.is_admin:
@@ -210,7 +223,7 @@ async def delete_cv(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User  not found"
+            detail="User not found"
         )
 
     if not user.cv_url:
@@ -220,23 +233,41 @@ async def delete_cv(
         )
 
     try:
-        # Remove file and update user record
-        await upload_user_cv(db, user_id, None)  # This will delete the CV
+        # Delete from GCS
+        success = await delete_user_file(user.cv_url)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete CV from storage"
+            )
+
+        # Clear CV URL from user record
+        user.cv_url = None
+        await db.commit()
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete CV: {str(e)}"
         )
 
-@router.get("/{user_id}/cv", response_class=FileResponse)
+@router.get("/{user_id}/cv")
 async def download_cv(
     user_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """Download user CV"""
+    """
+    Redirect to GCS signed URL for CV download
+    - Returns 302 redirect to temporary GCS URL
+    - URL expires after short period for security
+    """
     user = await get_user_by_id(db, user_id)
     if not user or not user.cv_url:
         raise HTTPException(404, "CV not found")
-    
-    # Since the CV is stored in Cloudinary, the URL will be returned
-    return {"cv_url": user.cv_url}
+
+    # For GCS, we can either:
+    # 1. Return the signed URL directly (if already generated)
+    # 2. Or redirect to it (better for security)
+    return RedirectResponse(url=user.cv_url)

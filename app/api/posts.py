@@ -55,7 +55,7 @@ async def create_new_post(
     if post_in.post_type == PostType.JOB_POSTING and not post_in.industry and not post_in.job_title:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Job posts must specify an industry"
+            detail="Job posts must specify an industry and title"
         )
     
     try:
