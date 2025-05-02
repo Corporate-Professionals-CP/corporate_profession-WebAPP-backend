@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     DOCS_URL: str = "/docs"
     API_V1_STR: str = "/api/v1"
     PORT: int = None
+    ENVIRONMENT: str
 
     # Database Configuration
     DATABASE_URL: PostgresDsn

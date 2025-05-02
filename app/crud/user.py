@@ -101,39 +101,35 @@ async def get_user_by_email_or_username(session: AsyncSession, identifier: str) 
 async def update_user(
     session: AsyncSession,
     user_id: UUID,
-    user_update: UserUpdate,
-    current_user: User
+    user_update: Union[UserUpdate, dict],  # Accept either type
+    current_user: Optional[User] = None
 ) -> User:
-    """
-    Update user profile with security checks
-    
-    """
     db_user = await get_user_by_id(session, user_id)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Authorization check
-    if db_user.id != current_user.id and not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot update other users"
-        )
+    # Handle both Pydantic model and dictionary input
+    if isinstance(user_update, dict):
+        update_data = user_update
+    else:
+        # Authorization checks only for UserUpdate (not for system updates)
+        if current_user is not None:
+            if db_user.id != current_user.id and not current_user.is_admin:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot update other users"
+                )
 
-    # Validate required fields
-    required_fields = ["full_name", "email", "job_title", "industry", "location", "years_of_experience"]
-    for field in required_fields:
-        if getattr(user_update, field) is None:
-            raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"{field} is required"
-            )
+            # Admin-only fields protection
+            if not current_user.is_admin:
+                for field in ["is_active", "is_admin", "is_verified"]:
+                    if getattr(user_update, field) is not None:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"Cannot update {field} without admin privileges"
+                        )
 
-    update_data = user_update.dict(exclude_unset=True)
-
-    # Admin-only fields protection
-    if not current_user.is_admin:
-        for field in ["is_active", "is_admin", "is_verified",]:
-            update_data.pop(field, None)
+        update_data = user_update.dict(exclude_unset=True)
 
     # Apply updates
     for field, value in update_data.items():
@@ -150,7 +146,6 @@ async def update_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Database error: {str(e)}"
         )
-
 
 async def get_user_for_update(
     session: AsyncSession, 
