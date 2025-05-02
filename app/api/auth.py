@@ -11,6 +11,9 @@ from jose import JWTError, jwt
 from authlib.integrations.starlette_client import OAuth
 from authlib.jose import JsonWebToken
 import uuid
+import requests
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from app.db.database import get_db
 from app.schemas.auth import (
@@ -90,7 +93,6 @@ async def login(
 
 
         if not user.is_active:
-            logger.warning(f"Login attempt for deactivated account: {user.email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account deactivated. Please contact support.",
@@ -98,7 +100,6 @@ async def login(
             )
 
         #if not user.is_verified:
-        #    logger.info(f"Login attempt for unverified account: {user.email}")
         #    raise HTTPException(
         #        status_code=status.HTTP_403_FORBIDDEN,
         #        detail="Account not verified. Please check your email.",
@@ -124,6 +125,44 @@ async def login(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+@router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def signup(
+    user_in: UserCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Email/password signup"""
+    existing_user = await get_user_by_email(db, user_in.email)
+    
+    if existing_user:
+        if existing_user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email was previously registered (account deactivated). Please contact support to reactivate."
+            )
+
+    # Create new user
+    user = await create_user(db, user_in)
+    
+    # Generate verification token
+    verification_token = create_access_token(
+        user_id=str(user.id),
+        expires_delta=timedelta(minutes=30),
+        additional_claims={"type": "verify"}
+    )
+
+    # Send verification email
+    await send_verification_email(
+        email=user.email,
+        name=user.full_name,
+        token=verification_token
+    )
+    
+    return user
 
 @router.post("/google", response_model=Token)
 async def google_oauth(
@@ -138,9 +177,10 @@ async def google_oauth(
         )
 
     try:
-        jwt_token = JsonWebToken.unsecure(google_data.id_token)
-        claims = jwt_token.decode()
-        
+        # Updated token decoding (replaces JsonWebToken.unsecure)
+        claims = jwt.decode(google_data.id_token, key=None)  # key=None for testing
+        claims.validate()  # Validates exp/iss/etc.
+
         if not claims.get("email_verified", False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -177,71 +217,42 @@ async def google_oauth(
             detail=f"Google authentication failed: {str(e)}"
         )
 
-@router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-async def signup(
-    user_in: UserCreate,
-    db: AsyncSession = Depends(get_db)
-):
-    """Email/password signup"""
-    existing_user = await get_user_by_email(db, user_in.email)
-    if existing_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-
-    else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This email was previously registered (account deactivated). Please contact support to reactivate."
-            )
-
-    user = await create_user(db, user_in)
-    verification_token = create_access_token(
-    user_id=str(user.id),
-    expires_delta=timedelta(minutes=30),
-    additional_claims={"type": "verify"}
-)
-    
-    await send_verification_email(
-        email=user.email,
-        name=user.full_name,
-        token=verification_token
-    )
-    return user
-
 @router.post("/signup/google", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def signup_with_google(
     user_in: UserCreateWithGoogle,
     db: AsyncSession = Depends(get_db)
 ):
-    """Google OAuth signup"""
-    if not oauth:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Google OAuth not configured"
+    """Google OAuth signup using google-auth library"""
+    try:
+        # Verify the token using Google's API
+        id_info = id_token.verify_oauth2_token(
+            user_in.google_token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID
         )
 
-    try:
-        jwt_token = JsonWebToken.unsecure(user_in.google_token)
-        claims = jwt_token.decode()
+        # Validate required claims
+        if id_info['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+            raise ValueError("Wrong issuer")
         
-        if not claims.get("email_verified", False):
+        if not id_info.get('email_verified', False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Google email not verified"
             )
 
-        existing_user = await get_user_by_email(db, claims["email"])
+        # Check if user exists
+        existing_user = await get_user_by_email(db, id_info['email'])
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
 
+        # Create new user
         user_data = {
-            "email": claims["email"],
-            "full_name": claims.get("name", ""),
+            "email": id_info['email'],
+            "full_name": id_info.get('name', ''),
             "is_verified": True,
             "hashed_password": get_password_hash(str(uuid.uuid4())),
             "recruiter_tag": user_in.recruiter_tag
@@ -249,11 +260,17 @@ async def signup_with_google(
         user = await create_user(db, user_data)
         return user
 
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid Google token: {str(e)}"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Google authentication failed: {str(e)}"
         )
+
 
 @router.post("/verify-email", response_model=UserRead)
 async def verify_email(

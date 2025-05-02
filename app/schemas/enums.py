@@ -1,6 +1,6 @@
 """
 Complete enumeration definitions for all application dropdowns and fixed options.
-Aligns with PRD section 2.2 requirements.
+Aligns with  requirements.
 """
 
 from enum import Enum

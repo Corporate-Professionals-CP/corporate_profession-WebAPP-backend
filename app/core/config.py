@@ -35,7 +35,10 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str
     GOOGLE_AUTHORIZE_URL: str
     GOOGLE_ACCESS_TOKEN_URL: str
-    GOOGLE_METADATA_URL: str 
+    GOOGLE_METADATA_URL: str
+    GOOGLE_JWKS_URL: str
+    GOOGLE_ISSUER: str
+
 
     # Email Service
     MAILJET_API_KEY: str

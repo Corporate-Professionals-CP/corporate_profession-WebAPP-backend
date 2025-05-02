@@ -8,7 +8,6 @@ from app.db.database import init_db, async_engine
 from app.api import auth, profiles, directory, posts, admin, feed
 from app.core.exceptions import validation_exception_handler, http_exception_handler
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
@@ -43,45 +42,45 @@ api_router.include_router(directory.router, tags=["Directory"])
 api_router.include_router(posts.router, tags=["Posts"])
 api_router.include_router(admin.router, tags=["Admin"])
 api_router.include_router(feed.router, tags=["Feed"])
-
 app.include_router(api_router)
 
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-    
+
     openapi_schema = get_openapi(
         title=settings.PROJECT_TITLE,
         version=settings.PROJECT_VERSION,
         description=settings.PROJECT_DESCRIPTION,
         routes=app.routes,
     )
-    
-    # Add OAuth2 configuration
-    openapi_schema["components"] = {
-        "securitySchemes": {
-            "OAuth2PasswordBearer": {
-                "type": "oauth2",
-                "flows": {
-                    "password": {
-                        "tokenUrl": "/api/auth/token",
-                        "scopes": {
-                            "user": "Regular user access",
-                            "recruiter": "Recruiter privileges",
-                            "admin": "Admin privileges"
-                        }
+
+    # Add security scheme without overwriting existing components
+    security_scheme = {
+        "OAuth2PasswordBearer": {
+            "type": "oauth2",
+            "flows": {
+                "password": {
+                    "tokenUrl": "/api/auth/token",
+                    "scopes": {
+                        "user": "Regular user access",
+                        "recruiter": "Recruiter privileges",
+                        "admin": "Admin privileges"
                     }
                 }
             }
         }
     }
-    
-    # Add security to all endpoints that need it
-    for path_item in openapi_schema["paths"].values():
-        for operation in path_item.values():
-            if operation.get("tags") and operation["tags"][0] != "Authentication":
-                operation["security"] = [{"OAuth2PasswordBearer": []}]
-    
+
+    # Merge security scheme with existing components
+    openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {}).update(security_scheme)
+
+    # Add security requirements to operations
+    for path in openapi_schema["paths"].values():
+        for operation in path.values():
+            if any(tag in operation.get("tags", []) for tag in ["Profiles", "Posts", "Directory", "Admin"]):
+                operation.setdefault("security", []).append({"OAuth2PasswordBearer": []})
+
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

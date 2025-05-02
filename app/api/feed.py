@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from typing import Optional
 from app.db.database import get_db
 from app.models.post import Post, PostType
-from app.schemas.post import PostRead, PostCreate
+from app.schemas.post import PostRead, PostCreate, Industry
 from app.core.security import get_current_user
 from app.models.user import User
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/feed", tags=["feed"])
 class FeedFilters(BaseModel):
     """Optional filters for feed customization"""
     post_types: Optional[List[PostType]] = None
-    industries: Optional[List[str]] = None
+    industries: Optional[List[Industry]] = None
     time_range: Optional[int] = None  # Days to look back
     search_query: Optional[str] = None
 
@@ -34,8 +34,7 @@ async def get_personalized_feed(
     current_user: Optional[User] = Depends(get_current_user)
 ):
     """
-    professional feed with enhanced filtering
-    PRD Requirements:
+    professional feed with filtering
     - Shows industry-relevant posts
     - Includes general posts
     - Supports post type filtering
