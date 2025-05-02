@@ -157,9 +157,6 @@ async def delete_post(
     Soft delete post using deleted flag (respects ClassVar is_active)
     """
 
-    logger.info(f"User {current_user.id} soft-deleted post {post_id}")
-
-
     # First retrive the post with author
     result = await session.execute(
         select(Post)
