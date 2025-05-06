@@ -48,7 +48,7 @@ async def get_personalized_feed(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Enhanced personalized feed with:
+    Personalized feed with:
     - Followed users' posts
     - Industry-relevant content
     - Skill-matched posts

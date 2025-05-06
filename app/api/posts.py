@@ -74,13 +74,13 @@ async def search_posts_endpoint(
     Example request with cursor:
     {
         "query": "python developer",
-        "industry": "TECH",
+        "industry": "Technology",
         "cursor": "2023-10-05T12:34:56.789,abc123-def456-ghi789",
         "limit": 50
     }
     """
     try:
-        # Call the updated CRUD method with cursor
+        # Call the  CRUD method with cursor
         posts, next_cursor = await search_posts(
             session=db,
             current_user=current_user,
