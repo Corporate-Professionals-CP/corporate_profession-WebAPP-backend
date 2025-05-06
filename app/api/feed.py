@@ -1,109 +1,114 @@
 """
-feed endpoints
-(Posting & Feed)
+feed endpoints (Posting & Feed)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from sqlmodel import select, or_, and_
-from datetime import datetime, timedelta
 from pydantic import BaseModel
-from typing import Optional
+from datetime import datetime, timedelta
 from app.db.database import get_db
 from app.models.post import Post, PostType
-from app.schemas.post import PostRead, PostCreate, Industry
+from app.schemas.post import PostRead
 from app.core.security import get_current_user
+from app.crud.post import get_feed_posts
 from app.models.user import User
+from app.utils.feed_cookies import (
+    track_seen_posts,
+    get_seen_posts_from_request
+)
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
-class FeedFilters(BaseModel):
-    """Optional filters for feed customization"""
-    post_types: Optional[List[PostType]] = None
-    industries: Optional[List[Industry]] = None
-    time_range: Optional[int] = None  # Days to look back
-    search_query: Optional[str] = None
+class FeedResponse(BaseModel):
+    main_posts: List[PostRead]
+    fresh_posts: List[PostRead]
+    next_cursor: Optional[str] = None
 
-@router.get("/", response_model=List[PostRead])
+@router.get("/", response_model=FeedResponse)
 async def get_personalized_feed(
-    offset: int = 0,
-    limit: int = 20,
-    filters: FeedFilters = Depends(),
-    db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user)
-):
-    """
-    professional feed with filtering
-    - Shows industry-relevant posts
-    - Includes general posts
-    - Supports post type filtering
-    - Newest posts first with configurable time range
-    - Pagination supported
-    """
-    # Base query - active posts sorted newest first
-    query = select(Post).where(Post.is_active == True)
-    
-    # Apply time range filter if specified
-    if filters.time_range:
-        cutoff_date = datetime.utcnow() - timedelta(days=filters.time_range)
-        query = query.where(Post.created_at >= cutoff_date)
-    
-    # Apply industry filtering
-    industry_filters = []
-    if current_user and current_user.industry:
-        industry_filters.append(Post.industry == current_user.industry)
-    
-    # Include general posts and any additional requested industries
-    industry_filters.append(Post.industry == None)
-    if filters.industries:
-        industry_filters.extend([Post.industry == ind for ind in filters.industries])
-    
-    query = query.where(or_(*industry_filters))
-    
-    # Apply post type filtering if specified
-    if filters.post_types:
-        query = query.where(Post.post_type.in_(filters.post_types))
-    
-    # Apply search query if specified
-    if filters.search_query:
-        query = query.where(
-            or_(
-                Post.title.ilike(f"%{filters.search_query}%"),
-                Post.content.ilike(f"%{filters.search_query}%")
-            )
-        )
-    
-    # Finalize query with sorting and pagination
-    result = await db.execute(
-        query.order_by(Post.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-    posts = result.scalars().all()
-
-    if not posts:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No posts available matching your criteria"
-        )
-
-    return posts
-
-@router.post("/", response_model=PostRead, status_code=status.HTTP_201_CREATED)
-async def create_post(
-    post_data: PostCreate,
+    request: Request,
+    response: Response,
+    post_type: Optional[PostType] = Query(
+        None,
+        description="Filter by post type: job, announcement, or update"
+    ),
+    recent_days: Optional[int] = Query(
+        None,
+        ge=1,
+        le=365,
+        description="Filter posts from last N days"
+    ),
+    cursor: Optional[str] = Query(
+        None,
+        description="Pagination cursor (format: 'timestamp,post_id')"
+    ),
+    limit: int = Query(50, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Create a new post for the professional feed
-    Requirements:
-    - Any user can create posts
-    - Posts can be tagged by industry
+    Enhanced personalized feed with:
+    - Followed users' posts
+    - Industry-relevant content
+    - Skill-matched posts
+    - Engagement-based ranking
+    - Fresh posts highlight
+    - Cursor pagination
     """
-    post = Post(**post_data.dict(), user_id=current_user.id)
-    db.add(post)
-    await db.commit()
-    await db.refresh(post)
-    return post
+    try:
+        # Calculate cutoff date if needed
+        cutoff_date = (datetime.utcnow() - timedelta(days=recent_days)) if recent_days else None
+
+        # Get seen posts from cookies
+        exclude_ids = get_seen_posts_from_request(request)
+
+        # Get enhanced feed posts
+        main_posts, fresh_posts, next_cursor = await get_feed_posts(
+            session=db,
+            current_user=current_user,
+            post_type=post_type,
+            cutoff_date=cutoff_date,
+            cursor=cursor,
+            limit=limit,
+            exclude_ids=exclude_ids
+        )
+
+        # Track seen posts in cookies
+        new_post_ids = [str(post[0].id) for post in main_posts + fresh_posts]
+        track_seen_posts(response, new_post_ids)
+
+        # Convert to response models
+        def create_post_read(post, user):
+            return PostRead(
+                id=post.id,
+                title=post.title,
+                content=post.content,
+                post_type=post.post_type,
+                industry=post.industry,
+                is_active=post.is_active,
+                created_at=post.created_at,
+                updated_at=post.updated_at,
+                user=user,
+                engagement=post.engagement,
+                skills=[s.name for s in post.skills]
+            )
+
+        return FeedResponse(
+            main_posts=[create_post_read(p, u) for p, u in main_posts],
+            fresh_posts=[create_post_read(p, u) for p, u in fresh_posts],
+            next_cursor=next_cursor
+        )
+
+    except HTTPException as e:
+        raise e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Feed retrieval failed: {str(e)}"
+        )

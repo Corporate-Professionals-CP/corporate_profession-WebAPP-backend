@@ -6,6 +6,7 @@ from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy.orm import Mapped, relationship
 from passlib.context import CryptContext
 
+from app.models.follow import UserFollow
 from app.models.skill import Skill, UserSkill
 from app.schemas.enums import (
     Industry,
@@ -62,6 +63,26 @@ class User(UserBase, table=True):
             secondary="userskill",
             lazy="selectin"
         )
+    )
+
+    following: List["User"] = Relationship(
+        back_populates="followers",
+        link_model=UserFollow,
+        sa_relationship_kwargs={
+            "primaryjoin": "User.id == UserFollow.follower_id",
+            "secondaryjoin": "User.id == UserFollow.followed_id",
+            "lazy": "selectin"
+        }
+    )
+
+    followers: List["User"] = Relationship(
+        back_populates="following",
+        link_model=UserFollow,
+        sa_relationship_kwargs={
+            "primaryjoin": "User.id == UserFollow.followed_id",
+            "secondaryjoin": "User.id == UserFollow.follower_id",
+            "lazy": "selectin"
+        }
     )
 
     age: Optional[int] = Field(None, ge=18, le=100)

@@ -80,7 +80,7 @@ async def login(
             logger.warning(f"Login attempt for non-existent user: {form_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                detail="User not found! sign up",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         if not verify_password(form_data.password, user.hashed_password):

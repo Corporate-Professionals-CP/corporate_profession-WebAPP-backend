@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel
-from app.schemas.enums import Industry, ExperienceLevel
+from app.schemas.enums import Industry, ExperienceLevel, JobTitle
 
 class LocationFilter(BaseModel):
     """Structured location filtering"""
@@ -15,7 +15,7 @@ class DirectorySearchParams(BaseModel):
     location: Optional[LocationFilter] = None
     skill: Optional[str] = None
     recruiter_only: Optional[bool] = False
-    job_title: Optional[str] = None
+    job_title: Optional[JobTitle] = None
     
     class Config:
         use_enum_values = True

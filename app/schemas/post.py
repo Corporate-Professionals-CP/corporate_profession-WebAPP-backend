@@ -3,7 +3,7 @@ Pydantic schemas for post data validation and serialization.
 Ensures API contracts match requirements.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
 
@@ -22,7 +22,8 @@ class PostBase(BaseModel):
     visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
     experience_level: Optional[ExperienceLevel] = None
     job_title: Optional[JobTitle] = None
-    tags: List[str] = Field(default_factory=list)
+    tags: Optional [List[str]] = Field(default_factory=list)
+    skills: Optional [List[str]] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
 
     class Config:
@@ -37,7 +38,7 @@ class PostCreate(PostBase):
                 raise ValueError("Job posts must have an expiration date")
             if v <= datetime.utcnow():
                 raise ValueError("Expiration date must be in the future")
-        return v
+            return v
 
 class PostUpdate(BaseModel):
     """Schema for post updates (all fields optional)"""
@@ -47,6 +48,8 @@ class PostUpdate(BaseModel):
     industry: Optional[Industry] = None
     experience_level: Optional[ExperienceLevel] = None
     job_title: Optional[JobTitle] = None
+    skills: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
     visibility: Optional[PostVisibility] = None
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
@@ -55,14 +58,31 @@ class PostRead(PostBase):
     """Complete post schema for API responses"""
     id: UUID
     user: Optional [UserPublic] = None
+    username: Optional[str] = None
+    skills: list[str]
     is_active: bool
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
 
+    @validator('skills', pre=True)
+    def convert_skills(cls, v):
+        if v and hasattr(v[0], 'name'):
+            return [skill.name for skill in v]
+        return v or []
+
+    @validator('username', pre=True, always=True)
+    def get_user_name(cls, v, values):
+        if 'user' in values and values['user']:
+            return values['user'].full_name
+        return v
+
     class Config:
         from_attributes = True
+        json_encoders = {
+            JobTitle: lambda v: v.value if v else None
+        }
 
 class PostSearch(BaseModel):
     """Schema for post search/filter parameters"""
@@ -79,8 +99,8 @@ class PostSearch(BaseModel):
         None,
         description="Filter posts created before this date"
     )
-    limit: int = Field(100, ge=1, le=1000, description="Pagination limit")
-    offset: int = Field(0, ge=0, description="Pagination offset")
+    limit: int = 100 
+    cursor: Optional[str] = Field(None, description="Pagination cursor")
 
     class Config:
         json_schema_extra = {
@@ -93,4 +113,9 @@ class PostSearch(BaseModel):
                 "offset": 0
             }
         }
+
+
+class PostSearchResponse(BaseModel):
+    results: List[PostRead]
+    next_cursor: Optional[str] = None
 

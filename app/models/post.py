@@ -11,15 +11,18 @@ from datetime import datetime
 from enum import Enum
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy import and_, or_
-
-from sqlalchemy import Column, Enum as PgEnum, JSON
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, Enum as PgEnum, JSON, String
 from sqlalchemy.orm import Mapped, relationship
 from sqlmodel import SQLModel, Field, Relationship
 from pydantic import validator
 from app.models.skill import Skill, PostSkill
+from app.models.post_comment import PostComment
+from app.models.post_reaction import PostReaction
+from app.models.follow import UserFollow
 
 # Import enums
-from app.schemas.enums import Industry, PostType, PostVisibility, ExperienceLevel
+from app.schemas.enums import Industry, PostType, PostVisibility, ExperienceLevel, JobTitle
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -57,37 +60,63 @@ class Post(SQLModel, table=True):
             nullable=False
         )
     )
+    job_title: Optional[JobTitle] = Field(
+        default=None,
+        index=True,
+        sa_type=String(50)
+    )
     industry: Optional[Industry] = Field(default=None, index=True)
     experience_level: Optional[ExperienceLevel] = Field(default=None)
 
-    status: PostStatus = Field(default=PostStatus.PUBLISHED)
-    visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
-    is_promoted: bool = Field(default=False)
+    status: PostStatus = Field(default=PostStatus.PUBLISHED, index=True)
+    visibility: PostVisibility = Field(default=PostVisibility.PUBLIC, index=True)
+    is_promoted: bool = Field(default=False, index=True)
     is_active: ClassVar[hybrid_property]
-    deleted: bool = Field(default=False) # using for the soft delete
+    skill_names: ClassVar[list[str]] = []
+    deleted: bool = Field(default=False, index=True) # using for the soft delete
 
     tags: List[str] = Field(default_factory=list, sa_type=JSON)
-    engagement: Dict[str, int] = Field(
-        default_factory=lambda: {"view_count": 0, "share_count": 0, "bookmark_count": 0},
-        sa_type=JSON
+    engagement: PostEngagement = Field(
+        default=PostEngagement().dict(),
+        sa_column=Column(JSONB, nullable=False, default=lambda: PostEngagement().dict())
     )
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
-        sa_column_kwargs={"onupdate": datetime.utcnow}
+        sa_column_kwargs={"onupdate": datetime.utcnow},
+        index=True
     )
     published_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
+
+    @hybrid_property
+    def skill_names(self):
+        return [skill.name for skill in self.skills] if self.skills else []
+
+    @skill_names.setter
+    def skill_names(self, value: list[str]) -> None:
+        pass #read-only setup
 
     user_id: str = Field(foreign_key="user.id", nullable=False)
     user: Mapped["User"] = Relationship(
         back_populates="posts")
 
     skills: Mapped[List["Skill"]] = Relationship(
-    back_populates="posts",
-    link_model=PostSkill)
+        back_populates="posts",
+        link_model=PostSkill,
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
+    comments: Mapped[List[PostComment]] = Relationship(
+        back_populates="post",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    reactions: Mapped[List[PostReaction]] = Relationship(
+        back_populates="post",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 
     @validator('expires_at')
@@ -120,12 +149,17 @@ class Post(SQLModel, table=True):
     def increment_views(self):
         self.engagement["view_count"] += 1
 
+
+    class Config:
+        arbitrary_types_allowed = True
+
 class PostCreate(SQLModel):
     title: str
     content: str
     post_type: PostType
     industry: Optional[Industry] = None
     tags: List[str] = []
+    job_title: Optional[JobTitle] = None
     expires_at: Optional[datetime] = None
 
     @validator('tags')

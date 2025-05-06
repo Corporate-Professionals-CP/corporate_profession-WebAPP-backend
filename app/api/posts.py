@@ -10,11 +10,12 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-
+from sqlalchemy import select, or_, and_
+from sqlalchemy.orm import selectinload
 from app.db.database import get_db
 from app.models.user import User
 from app.models.post import PostType
-from app.schemas.post import PostCreate, PostRead, PostUpdate, PostSearch
+from app.schemas.post import PostCreate, PostRead, PostUpdate, PostSearch, PostSearchResponse
 from app.crud.post import (
     create_post,
     get_post,
@@ -50,126 +51,98 @@ async def create_new_post(
     - content: 10-2000 characters
     - post_type: One of [job, announcement, update]
     - industry: Required for job posts
+    - job_title: Required for job posts
     """
-    # Validate job posts have industry specified
-    if post_in.post_type == PostType.JOB_POSTING and not post_in.industry and not post_in.job_title:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Job posts must specify an industry and title"
-        )
-    
-    try:
-        return await create_post(db, post_in, current_user)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
 
-@router.get("/feed/", response_model=List[PostRead])
-async def read_feed(
-    post_type: Optional[PostType] = Query(
-        None,
-        description="Filter by post type: job, announcement, or update"
-    ),
-    recent_days: Optional[int] = Query(
-        None,
-        ge=1,
-        le=365,
-        description="Filter posts from last N days"
-    ),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, le=100),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Get personalized feed according to requirements:
-    - Shows posts from user's industry + general posts
-    - Ordered by newest first
-    - Filterable by post type and recency
-    """
-    try:
-        cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
+    if post_in.post_type == PostType.JOB_POSTING:
+        if not post_in.job_title:
+            raise HTTPException(422, "Job posts require a job title")
+        if not post_in.skills:
+            raise HTTPException(422, "Job posts require at least one skill")
 
-        posts = await get_feed_posts(
-            session=db,
-            current_user=current_user,
-            post_type=post_type,
-            cutoff_date=cutoff_date,
-            offset=offset,
-            limit=limit
-        )
+    return await create_post(db, post_in, current_user)
 
-        if not posts:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No posts found in your feed"
-            )
-
-        return [
-            PostRead(
-                id=post.id,
-                title=post.title,
-                content=post.content,
-                post_type=post.post_type,
-                industry=post.industry,
-                is_active=post.is_active,
-                created_at=post.created_at,
-                updated_at=post.updated_at,
-                user=user
-            )
-            for post, user in posts
-        ]
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving feed: {str(e)}"
-        )
-
-
-@router.post("/search", response_model=List[PostRead])
+@router.post("/search", response_model=PostSearchResponse)
 async def search_posts_endpoint(
     search_params: PostSearch,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Advanced post search with multiple filters
+    Advanced post search with cursor-based pagination
+    ---
+    Example request with cursor:
+    {
+        "query": "python developer",
+        "industry": "TECH",
+        "cursor": "2023-10-05T12:34:56.789,abc123-def456-ghi789",
+        "limit": 50
+    }
     """
-    posts = await search_posts(
-        session=db,
-        current_user=current_user,
-        query=search_params.query,
-        industry=search_params.industry,
-        post_type=search_params.post_type,
-        created_after=search_params.created_after,
-        end_date=search_params.end_date,
-        offset=search_params.offset,
-        limit=search_params.limit
-    )
-    
-    if not posts:
+    try:
+        # Call the updated CRUD method with cursor
+        posts, next_cursor = await search_posts(
+            session=db,
+            current_user=current_user,
+            query=search_params.query,
+            industry=search_params.industry,
+            post_type=search_params.post_type,
+            job_title=search_params.job_title,
+            created_after=search_params.created_after,
+            end_date=search_params.end_date,
+            cursor=search_params.cursor,
+            limit=search_params.limit
+        )
+
+        if not posts:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No posts found matching your criteria"
+            )
+
+        # Maintain existing serialization logic
+        results = [
+            PostRead(
+                id=post.id,
+                title=post.title,
+                content=post.content,
+                is_active=post.is_active,
+                post_type=post.post_type,
+                job_title=post.job_title,
+                industry=post.industry,
+                experience_level=post.experience_level,
+                status=post.status,
+                visibility=post.visibility,
+                tags=post.tags,
+                engagement=post.engagement,
+                created_at=post.created_at,
+                updated_at=post.updated_at,
+                published_at=post.published_at,
+                expires_at=post.expires_at,
+                user_id=post.user_id,
+                user_name=user.full_name,
+                skills=[skill.name for skill in post.skills]
+            )
+            for post, user in posts
+        ]
+
+        return PostSearchResponse(
+            results=results,
+            next_cursor=next_cursor
+        )
+
+    except HTTPException as e:
+        raise e
+    except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No posts found matching your criteria"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
         )
-    
-    return [
-        PostRead(
-            id=post.id,
-            title=post.title,
-            content=post.content,
-            post_type=post.post_type,
-            industry=post.industry,
-            is_active=post.is_active,
-            created_at=post.created_at,
-            updated_at=post.updated_at,
-            user=user
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Search failed: {str(e)}"
         )
-        for post, user in posts
-    ]
 
 @router.get("/user/{user_id}", response_model=List[PostRead])
 async def read_user_posts(

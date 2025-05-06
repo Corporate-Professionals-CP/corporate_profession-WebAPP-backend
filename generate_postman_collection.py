@@ -50,6 +50,12 @@ api_endpoints = [
     # Feed
     {"method": "GET", "path": "/api/feed/", "name": "Get Personalized Feed"},
     {"method": "POST", "path": "/api/feed/", "name": "Create Post"},
+
+    # Follow
+    {"method": "POST", "path": "/api/users/{user_id}/follow", "name": "Follow User Endpoint"},
+    {"method": "DELETE", "path": "/api/users/{user_id}/unfollow", "name": "Unfollow User Endpoint"},
+    {"method": "GET", "path": "/api/users/me/following", "name": "Get Following Endpoint"},
+    {"mehtod": "GET", "path": "/api/users/me/followers", "name": "Get Followers Endpoint"},
 ]
 
 def create_postman_collection():

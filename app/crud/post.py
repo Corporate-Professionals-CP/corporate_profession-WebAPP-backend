@@ -10,15 +10,17 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import select, and_, or_, func, desc, cast, JSON, Float, type_coerce
+
 from fastapi import HTTPException, status
-import sqlalchemy
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
 from app.models.user import User
+from app.models.skill import Skill
+from app.models.follow import UserFollow
 from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead
 from app.schemas.enums import Industry, PostType, JobTitle, PostVisibility
 from app.core.security import get_current_active_user
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, Mapped
 
 async def create_post(
     session: AsyncSession,
@@ -28,53 +30,87 @@ async def create_post(
     """
     Optimized post creation with enhanced validation and error handling
     """
-    # Create dictionary of post data for cleaner manipulation
-    post_dict = post_data.dict(exclude_unset=True, exclude={"tags"})
-    
-    # Handle job post specific validations
-    if post_data.post_type == PostType.JOB_POSTING:
-        if not post_data.industry:
-            if not post_data.job_title:
+    try:
+        # Create dictionary of post data
+        post_dict = post_data.dict(exclude_unset=True, exclude={"tags", "skills"})
+
+        # Handle job post validations
+        if post_data.post_type == PostType.JOB_POSTING:
+            if not post_data.industry:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="Job posts must specify an industry"
-            )
-        post_dict.setdefault("expires_at", datetime.utcnow() + timedelta(days=30))
+                )
+            post_dict.setdefault("expires_at", datetime.utcnow() + timedelta(days=30))
 
-    # Create post instance with all required fields
-    db_post = Post(
-        **post_dict,
-        user_id=str(current_user.id),
-        tags=post_data.tags or [],
-        engagement=PostEngagement().dict(),
-        status=PostStatus.PUBLISHED,
-        published_at=datetime.utcnow(),
-        updated_at=datetime.utcnow() 
-    )
+        # Resolve skills first
+        resolved_skills = await _resolve_skills(session, post_data.skills)
 
-    try:
-        async with session.begin():
-            session.add(db_post)
-            await session.flush()
-            await session.refresh(db_post, ["user"])
-            
-            # Increment user's post count if needed
-            if hasattr(db_post.user, 'post_count'):
-                db_post.user.post_count += 1
-                session.add(db_post.user)
-            
-            return db_post
-            
-    except sqlalchemy.exc.IntegrityError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Database integrity error occurred"
+        # Create post instance
+        db_post = Post(
+            **post_dict,
+            user_id=str(current_user.id),
+            skills=resolved_skills,
+            tags=post_data.tags or [],
+            engagement=PostEngagement().dict(),
+            status=PostStatus.PUBLISHED,
+            published_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
+
+        session.add(db_post)
+        await session.flush()
+        
+        # Eager load relationships needed for response
+        result = await session.execute(
+            select(Post)
+            .options(
+                selectinload(Post.skills),
+                selectinload(Post.user)
+            )
+            .where(Post.id == db_post.id)
+        )
+        db_post = result.scalar_one()
+        
+        await session.commit()
+        return db_post
+
     except Exception as e:
+        await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create post: {str(e)}"
         )
+
+
+async def _resolve_skills(session: AsyncSession, skill_names: List[str]) -> List[Skill]:
+    """Get or create skills by name"""
+    if not skill_names:
+        return []
+
+    # Case-insensitive search
+    stmt = select(Skill).where(
+        func.lower(Skill.name).in_([name.lower() for name in skill_names])
+    )
+    result = await session.execute(stmt)
+    existing_skills = result.scalars().all()
+
+    # Find new skills needed
+    existing_names = {s.name.lower() for s in existing_skills}
+    new_skills = [
+        Skill(name=name.title())  # Ensure consistent capitalization
+        for name in skill_names
+        if name.lower() not in existing_names
+    ]
+
+    # Add new skills if any
+    if new_skills:
+        session.add_all(new_skills)
+        await session.flush()
+        existing_skills.extend(new_skills)
+
+    # Return the list of Skill objects
+    return existing_skills
 
 async def get_post_with_user(
     session: AsyncSession,
@@ -214,69 +250,135 @@ async def get_filtered_posts(
     )
     return result.scalars().all()
 
+
 async def get_feed_posts(
     session: AsyncSession,
     current_user: User,
     *,
     post_type: Optional[PostType] = None,
+    cursor: Optional[str] = None,
     cutoff_date: Optional[datetime] = None,
-    offset: int = 0,
-    limit: int = 50
-) -> List[Tuple[Post, User]]:
-    """
-    Get feed posts according to specifications:
-    - Includes posts from user's industry AND general posts
-    - Respects post visibility settings
-    - Filters by type and date if specified
-    """
+    limit: int = 50,
+    exclude_ids: Optional[List[UUID]] = None
+) -> Tuple[List[Tuple[Post, User]], Optional[str]]:
+    """Enhanced feed algorithm with engagement scoring and fresh posts"""
+    # Cursor parsing and base query setup
+    cursor_time, cursor_id = None, None
+    if cursor:
+        try:
+            cursor_time_str, cursor_id = cursor.split(",")
+            cursor_time = datetime.fromisoformat(cursor_time_str)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid cursor format"
+            )
+
+    # Calculate engagement score
+    engagement_score = (
+        (Post.engagement["view_count"].astext.cast(Float) * 0.4) +
+        (Post.engagement["bookmark_count"].astext.cast(Float) * 0.6)
+    ).label("engagement_score")
+
+    # Base query with scoring
     query = (
-        select(Post, User)
+        select(
+            Post,
+            User,
+            engagement_score
+        )
         .join(User)
+        .distinct(Post.id)
         .where(Post.status == PostStatus.PUBLISHED)
         .where(Post.is_active == True)
         .where(Post.deleted == False)
+        .where(or_(
+            Post.expires_at.is_(None),
+            Post.expires_at > datetime.utcnow()
+        ))
         .where(
+            (Post.post_type == post_type) if post_type
+            else True
+        )
+        .where(
+            (Post.created_at >= cutoff_date) if cutoff_date
+            else True
+        )
+    )
+
+    # Exclusion of already seen posts
+    if exclude_ids:
+        query = query.where(Post.id.not_in(exclude_ids))
+
+    # Followed users condition
+    followed_users = await session.execute(
+        select(UserFollow.followed_id)
+        .where(UserFollow.follower_id == str(current_user.id))
+    )
+    followed_ids = [str(u[0]) for u in followed_users.all()]
+
+    # Relevance conditions with priority
+    relevance_conditions = [
+        # Highest priority: Followed users
+        Post.user_id.in_(followed_ids),
+        
+        # Medium priority: Industry match
+        and_(
+            Post.industry == current_user.industry,
+            Post.visibility.in_(["public", "industry"])
+        ),
+        
+        # Skill-based matches
+        Post.skills.any(Skill.id.in_([s.id for s in current_user.skills]))
+    ]
+
+    # Add public posts condition
+    relevance_conditions.append(
+        and_(
+            Post.industry.is_(None),
+            Post.visibility == "public"
+        )
+    )
+
+    query = query.where(or_(*relevance_conditions))
+
+    # Cursor pagination
+    if cursor_time and cursor_id:
+        query = query.where(
             or_(
-                Post.expires_at.is_(None),
-                Post.expires_at > datetime.utcnow()
+                Post.created_at < cursor_time,
+                and_(
+                    Post.created_at == cursor_time,
+                    Post.id < cursor_id
+                )
             )
         )
-    )
 
-    # Apply visibility rules
-    query = query.where(
-        or_(
-            # Posts from user's industry
-            and_(
-                Post.industry == current_user.industry,
-                Post.visibility.in_(["public", "industry"])
-            ),
-            # General posts (no industry specified)
-            and_(
-                Post.industry.is_(None),
-                Post.visibility == "public"
-            ),
-            # User's own posts
-            Post.user_id == str(current_user.id)
-        )
-    )
-
-    # Apply post type filter
-    if post_type:
-        query = query.where(Post.post_type == post_type)
-
-    # Apply recency filter
-    if cutoff_date:
-        query = query.where(Post.created_at >= cutoff_date)
-
-    # Final ordering and pagination
+    # Execute with engagement-based ordering
     result = await session.execute(
-        query.order_by(Post.created_at.desc())
-        .offset(offset)
-        .limit(limit)
+        query.order_by(
+            desc(Post.id),
+            desc("engagement_score"),
+            desc(Post.created_at)
+        )
+        .limit(limit + 3)  # Get extra for freshness check
     )
+    posts = result.all()
 
-    return result.all()
+    # Split into fresh and main posts
+    fresh_posts = [
+        p for p in posts 
+        if p[0].created_at > datetime.utcnow() - timedelta(minutes=5)
+    ]
+    main_posts = [p for p in posts if p not in fresh_posts][:limit]
+
+    # Generate cursor
+    next_cursor = None
+    if main_posts:
+        last_post = main_posts[-1][0]
+        next_cursor = f"{last_post.created_at.isoformat()},{last_post.id}"
+
+    return main_posts, fresh_posts[:3], next_cursor
 
 async def get_post(
     session: AsyncSession,
@@ -383,79 +485,87 @@ async def search_posts(
     query: Optional[str] = None,
     industry: Optional[Industry] = None,
     post_type: Optional[PostType] = None,
-    job_title: Optional[JobTitle] = None,
-    created_after: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    offset: int = 0,
+    cursor: Optional[str] = None,
     limit: int = 100
-) -> List[Tuple[Post, User]]:
-    """
-    Advanced post search with user context
-    """
+) -> Tuple[List[Tuple[Post, User]], Optional[str]]:
+    """Enhanced search with cursor pagination and relevance"""
+    # Cursor parsing (same as get_feed_posts)
+    cursor_time = None
+    cursor_id = None
+    if cursor:
+        try:
+            cursor_time_str, cursor_id = cursor.split(",")
+            cursor_time = datetime.fromisoformat(cursor_time_str)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid cursor format"
+            )
+
+    # Build base query
     query_stmt = (
         select(Post, User)
         .join(User)
+        .options(selectinload(Post.skills))
+        .distinct(Post.id)
         .where(Post.status == PostStatus.PUBLISHED)
     )
 
-    # Keyword search
+    # Search relevance weights
+    relevance_conditions = []
     if query:
         search_terms = query.split()
-        conditions = []
         for term in search_terms:
             term_pattern = f"%{term}%"
-            conditions.append(Post.title.ilike(term_pattern))
-            conditions.append(Post.content.ilike(term_pattern))
-        query_stmt = query_stmt.where(or_(*conditions)) 
+            relevance_conditions.extend([
+                Post.title.ilike(term_pattern),
+                Post.content.ilike(term_pattern),
+                Post.skills.any(Skill.name.ilike(term_pattern))
+            ])
 
-    # Industry filter
+    # Apply filters
+    filter_conditions = []
     if industry:
-        query_stmt = query_stmt.where(Post.industry == industry)
-
-    # Job Title
-    if job_title:
-        query_smt = query_smt.where(post.job_title == job_title)
-
-    # Post type filter
+        filter_conditions.append(Post.industry == industry)
     if post_type:
-        query_stmt = query_stmt.where(Post.post_type == post_type)
+        filter_conditions.append(Post.post_type == post_type)
 
-    # Date range
-    if created_after:
-        query_stmt = query_stmt.where(Post.created_at >= created_after)
-    if end_date:
-        query_stmt = query_stmt.where(Post.created_at <= end_date)
+    # Combine conditions
+    if relevance_conditions:
+        query_stmt = query_stmt.where(or_(*relevance_conditions))
+    if filter_conditions:
+        query_stmt = query_stmt.where(and_(*filter_conditions))
 
-    # Visibility controls
-    if current_user:
+    # Cursor pagination
+    if cursor_time and cursor_id:
         query_stmt = query_stmt.where(
             or_(
-                Post.visibility == "public",
+                Post.created_at < cursor_time,
                 and_(
-                    Post.visibility == "industry",
-                    User.industry == current_user.industry
-                ),
-                Post.user_id == str(current_user.id)
+                    Post.created_at == cursor_time,
+                    Post.id < cursor_id
+                )
             )
         )
 
+    # Execute query
     result = await session.execute(
-        query_stmt.order_by(Post.created_at.desc())
-        .offset(offset)
+        query_stmt.order_by(Post.created_at.desc(), Post.id.desc())
         .limit(limit)
     )
-
     posts = result.all()
-    if not posts:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No posts found matching your criteria"
-        )
 
-    return posts
+    # Generate next cursor
+    next_cursor = None
+    if posts:
+        last_post = posts[-1][0]
+        next_cursor = f"{last_post.created_at.isoformat()},{last_post.id}"
+
+    return posts, next_cursor
 
 async def search_jobs_by_criteria(
     session: AsyncSession,
+    current_user: Optional[User] = None,
     skill: Optional[str] = None,
     location: Optional[str] = None,
     experience: Optional[str] = None,
@@ -466,7 +576,21 @@ async def search_jobs_by_criteria(
     """
     Search for job postings based on multiple criteria: skill, location, experience, and job title.
     """
+
+    if current_user:
+        followed_users = await session.execute(
+            select(UserFollow.followed_id)
+            .where(UserFollow.follower_id == str(current_user.id))
+        )
+        followed_ids = [str(u[0]) for u in followed_users.all()]
+
+        
     stmt = select(Post).where(Post.post_type == PostType.JOB_POSTING)
+    stmt = stmt.where(
+            or_(
+                Post.user_id.in_(followed_ids),
+            )
+        )
 
     # Filter by skill if provided
     if skill:
