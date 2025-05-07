@@ -54,7 +54,7 @@ api_endpoints = [
     {"method": "POST", "path": "/api/users/{user_id}/follow", "name": "Follow User Endpoint"},
     {"method": "DELETE", "path": "/api/users/{user_id}/unfollow", "name": "Unfollow User Endpoint"},
     {"method": "GET", "path": "/api/users/me/following", "name": "Get Following Endpoint"},
-    {"mehtod": "GET", "path": "/api/users/me/followers", "name": "Get Followers Endpoint"},
+    {"method": "GET", "path": "/api/users/me/followers", "name": "Get Followers Endpoint"},
 ]
 
 def create_postman_collection():
