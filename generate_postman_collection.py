@@ -49,7 +49,6 @@ api_endpoints = [
 
     # Feed
     {"method": "GET", "path": "/api/feed/", "name": "Get Personalized Feed"},
-    {"method": "POST", "path": "/api/feed/", "name": "Create Post"},
 
     # Follow
     {"method": "POST", "path": "/api/users/{user_id}/follow", "name": "Follow User Endpoint"},
