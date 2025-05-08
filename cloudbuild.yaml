@@ -1,6 +1,0 @@
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/github.com/corporate-professionals-cp/corporate_profession-webapp-backend:$COMMIT_SHA', '.']
-options:
-  logging: CLOUD_LOGGING_ONLY 
-serviceAccount: 'projects/corporate-professionals-459210/serviceAccounts/985687851836-compute@developer.gserviceaccount.com'
