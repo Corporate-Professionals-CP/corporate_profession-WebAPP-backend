@@ -66,8 +66,8 @@ psycopg2==2.9.10
 psycopg2-binary==2.9.10
 ptyprocess==0.7.0
 pure-eval==0.2.2
-pyasn1>=0.4.1,<0.7.0
-pyasn1_modules==0.4.2
+pyasn1
+pyasn1_modules
 pycodestyle==2.11.1
 pycparser==2.22
 pydantic==2.10.6
