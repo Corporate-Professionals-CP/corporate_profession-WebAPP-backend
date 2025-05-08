@@ -57,11 +57,11 @@ class Settings(BaseSettings):
     EMAILS_FROM_NAME: str = "Corporate Professionals"
 
 
-    # Cloudinary Configuration
-    CLOUDINARY_CLOUD_NAME: str
-    CLOUDINARY_API_KEY: str
-    CLOUDINARY_API_SECRET: str
-    CLOUDINARY_FOLDER: str = "cv_uploads"
+    # # Cloudinary Configuration
+    # CLOUDINARY_CLOUD_NAME: str
+    # CLOUDINARY_API_KEY: str
+    # CLOUDINARY_API_SECRET: str
+    # CLOUDINARY_FOLDER: str = "cv_uploads"
 
     # Redis (for rate limiting)
     # REDIS_URL: Optional[RedisDsn] = None
