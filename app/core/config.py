@@ -8,6 +8,7 @@ from pydantic import AnyUrl, PostgresDsn, RedisDsn, validator
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 import json
+import base64
 
 class Settings(BaseSettings):
     # Application Metadata
@@ -45,7 +46,7 @@ class Settings(BaseSettings):
     GCS_PROJECT_ID: str
     GCS_BUCKET_NAME: str
     GCS_BASE_PATH: str = "cvs"
-    GCS_CREDENTIALS_JSON: Optional[str] = None
+    GCS_CREDENTIALS_JSON_B64: Optional[str] = None
     MAX_CV_SIZE: int = 5 * 1024 * 1024  # 5MB
 
     # Email Service
@@ -68,12 +69,21 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",")]
         return v
 
-
     @validator("MAX_CV_SIZE")
     def validate_max_cv_size(cls, v):
         if v > 10 * 1024 * 1024:  # 10MB max
             raise ValueError("MAX_CV_SIZE cannot exceed 10MB")
         return v
+        
+    @property
+    def GCS_CREDENTIALS_JSON(self) -> Optional[str]:
+        """Decode base64 encoded credentials if available"""
+        if self.GCS_CREDENTIALS_JSON_B64:
+            try:
+                return base64.b64decode(self.GCS_CREDENTIALS_JSON_B64).decode('utf-8')
+            except Exception as e:
+                raise ValueError(f"Failed to decode GCS credentials: {str(e)}")
+        return None
 
     class Config:
         env_file = ".env"
