@@ -32,7 +32,7 @@ from app.core.security import (
 from app.core.config import settings
 from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id, get_user_by_email_or_username
 from app.core.email import send_verification_email, send_password_reset_email
-
+from pydantic import parse_obj_as
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -177,30 +177,24 @@ async def google_oauth(
     google_data: GoogleToken,
     db: AsyncSession = Depends(get_db)
 ):
-    """Google OAuth login endpoint"""
-    if not oauth:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Google OAuth not configured"
+    try:
+        id_info = id_token.verify_oauth2_token(
+            google_data.id_token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID
         )
 
-    try:
-        # Updated token decoding (replaces JsonWebToken.unsecure)
-        claims = jwt.decode(google_data.id_token, key=None)  # key=None for testing
-        claims.validate()  # Validates exp/iss/etc.
-
-        if not claims.get("email_verified", False):
+        if not id_info.get("email_verified", False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Google email not verified"
             )
 
-        # Find or create user
-        user = await get_user_by_email(db, claims["email"])
+        user = await get_user_by_email(db, id_info["email"])
         if not user:
             user_data = {
-                "email": claims["email"],
-                "full_name": claims.get("name", ""),
+                "email": id_info["email"],
+                "full_name": id_info.get("name", ""),
                 "is_verified": True,
                 "hashed_password": get_password_hash(str(uuid.uuid4()))
             }
@@ -238,32 +232,44 @@ async def signup_with_google(
             google_requests.Request(),
             settings.GOOGLE_CLIENT_ID
         )
+        
+        # Log the full Google response for debugging
+        logger.info(f"Google ID Info: {id_info}")
 
         # Validate required claims
-        if id_info['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+        if id_info.get('iss') not in ['accounts.google.com', 'https://accounts.google.com']:
             raise ValueError("Wrong issuer")
-        
+
+        # Check email verification
         if not id_info.get('email_verified', False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Google email not verified"
             )
 
-        # Check if user exists
-        existing_user = await get_user_by_email(db, id_info['email'])
+        # Extract email safely
+        email = id_info.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google response missing email"
+            )
+
+        # Check existing user
+        existing_user = await get_user_by_email(db, email)
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
 
-        # Create new user
+        # Create user data
         user_data = {
-            "email": id_info['email'],
-            "full_name": id_info.get('name', ''),
+            "email": email,
+            "full_name": id_info.get("name", ""),
             "is_verified": True,
             "hashed_password": get_password_hash(str(uuid.uuid4())),
-            "recruiter_tag": user_in.recruiter_tag
+            "recruiter_tag": user_in.recruiter_tag  # Direct access is safe
         }
         user = await create_user(db, user_data)
         return user
@@ -274,11 +280,11 @@ async def signup_with_google(
             detail=f"Invalid Google token: {str(e)}"
         )
     except Exception as e:
+        logger.error(f"Google auth error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Google authentication failed: {str(e)}"
         )
-
 
 @router.post("/verify-email", response_model=UserRead)
 async def verify_email(
