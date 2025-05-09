@@ -5,13 +5,14 @@ profile endpoints implementation
 - CV upload handling
 """
 
+import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Union, Optional
 import shutil
 import os
-
+from datetime import timedelta
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.user import UserRead, UserPublic, UserUpdate, UserProfileCompletion
@@ -22,9 +23,13 @@ from app.crud.user import (
     upload_user_cv,
     get_profile_completion
 )
+from google.cloud.exceptions import GoogleCloudError
+from urllib.parse import urlparse
 from app.core.config import settings
-from app.utils.file_handling import save_uploaded_file, delete_user_file
-from fastapi.responses import FileResponse
+from app.utils.file_handling import save_uploaded_file, delete_user_file, bucket
+from fastapi.responses import FileResponse, RedirectResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -257,21 +262,64 @@ async def delete_cv(
             detail=f"Failed to delete CV: {str(e)}"
         )
 
+
 @router.get("/{user_id}/cv")
 async def download_cv(
     user_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Redirect to GCS signed URL for CV download
-    - Returns 302 redirect to temporary GCS URL
-    - URL expires after short period for security
-    """
     user = await get_user_by_id(db, user_id)
     if not user or not user.cv_url:
-        raise HTTPException(404, "CV not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "CV not found")
 
-    # For GCS, we can either:
-    # 1. Return the signed URL directly (if already generated)
-    # 2. Or redirect to it (better for security)
-    return RedirectResponse(url=user.cv_url)
+    try:
+        # Validate URL structure
+        parsed_url = urlparse(user.cv_url)
+        if not parsed_url.netloc.endswith('storage.googleapis.com'):
+            raise ValueError("Invalid GCS URL format")
+
+        # Extract bucket name and blob path from URL
+        path_parts = parsed_url.path.lstrip('/').split('/')
+        if len(path_parts) < 2:
+            raise ValueError("Invalid GCS URL path structure")
+
+        bucket_name = path_parts[0]
+        blob_path = '/'.join(path_parts[1:]).split('?')[0]
+
+        if bucket_name != settings.GCS_BUCKET_NAME:
+            raise ValueError("Bucket name mismatch")
+
+        # Get blob reference
+        blob = bucket.blob(blob_path)
+
+        if not blob.exists():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "CV file not found in storage")
+
+        # Generate fresh signed URL with 5 minute expiration
+        new_url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(minutes=5),
+            method="GET"
+        )
+
+        return RedirectResponse(url=new_url)
+
+    except ValueError as e:
+        logger.error(f"URL validation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid CV URL format"
+        )
+    except GoogleCloudError as e:
+        logger.error(f"GCS API error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Storage service unavailable"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate download URL"
+        )
+

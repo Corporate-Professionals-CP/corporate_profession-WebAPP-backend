@@ -56,13 +56,6 @@ class Settings(BaseSettings):
     EMAILS_FROM_EMAIL: str
     EMAILS_FROM_NAME: str = "Corporate Professionals"
 
-
-    # # Cloudinary Configuration
-    # CLOUDINARY_CLOUD_NAME: str
-    # CLOUDINARY_API_KEY: str
-    # CLOUDINARY_API_SECRET: str
-    # CLOUDINARY_FOLDER: str = "cv_uploads"
-
     # Redis (for rate limiting)
     # REDIS_URL: Optional[RedisDsn] = None
 
@@ -75,16 +68,16 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",")]
         return v
 
-    #@validator("GCS_CREDENTIALS_JSON", pre=True)
-    #def validate_gcs_credentials(cls, v):
-    #    try:
-    #        return json.loads(v)
-    #    except json.JSONDecodeError:
-    #        raise ValueError("Invalid GCS credentials JSON format")
-    #    except Exception as e:
-    #        logger.error(f"GCS credentials validation failed: {str(e)}")
-    #
-    #        raise
+    @validator("GCS_CREDENTIALS_JSON", pre=True)
+    def validate_gcs_credentials(cls, v):
+        try:
+            return json.loads(v)
+        except json.JSONDecodeError:
+            raise ValueError("Invalid GCS credentials JSON format")
+        except Exception as e:
+            logger.error(f"GCS credentials validation failed: {str(e)}")
+    
+            raise
 
     @validator("MAX_CV_SIZE")
     def validate_max_cv_size(cls, v):

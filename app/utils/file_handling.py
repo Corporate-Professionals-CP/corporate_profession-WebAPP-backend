@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 # Initialize GCS client using environment variables
-"""
+
 try:
     # Load credentials from environment variable
     credentials_info = json.loads(settings.GCS_CREDENTIALS_JSON)
@@ -25,7 +25,7 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize GCS client: {str(e)}")
     raise RuntimeError("Could not initialize cloud storage")
-"""
+
 
 ALLOWED_MIME_TYPES = {
     "application/pdf": "pdf",
