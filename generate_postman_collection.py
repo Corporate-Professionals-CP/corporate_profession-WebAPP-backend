@@ -4,7 +4,16 @@ from collections import defaultdict
 # Define your API endpoints data structure
 api_endpoints = [
     # Authentication
-    {"method": "POST", "path": "/api/auth/login", "name": "Login"},
+    {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "name": "Login"
+        "body": {
+            "username": "string",
+            "password": "your password"
+        }
+    },
+
     {"method": "POST", "path": "/api/auth/token", "name": "Login"},
     {"method": "POST", "path": "/api/auth/google", "name": "Google Oauth"},
     {"method": "POST", "path": "/api/auth/signup", "name": "Signup"},
