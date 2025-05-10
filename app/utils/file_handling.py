@@ -7,6 +7,7 @@ from app.core.config import settings
 import magic
 import logging
 from datetime import datetime, timedelta
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ ALLOWED_MIME_TYPES = {
     "application/pdf": "pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"
 }
-
+"""
 async def save_uploaded_file(file: UploadFile, user_id: str) -> str:
     """Upload file to Google Cloud Storage with validation"""
     try:

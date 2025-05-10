@@ -5,7 +5,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.exceptions import RequestValidationError
 from app.core.config import settings
 from app.db.database import init_db, async_engine
-from app.api import auth, profiles, directory, posts, admin, feed, follow
+from app.api import auth, profiles, directory, posts, admin, feed, follow, comments, post_reaction
 from app.core.exceptions import validation_exception_handler, http_exception_handler
 
 @asynccontextmanager
@@ -42,7 +42,9 @@ api_router.include_router(directory.router, tags=["Directory"])
 api_router.include_router(posts.router, tags=["Posts"])
 api_router.include_router(admin.router, tags=["Admin"])
 api_router.include_router(feed.router, tags=["Feed"])
-api_router.include_router(follow.router, tags=["follow"])
+api_router.include_router(follow.router, tags=["Follow"])
+api_router.include_router(comments.router, tags=["Comments"])
+api_router.include_router(post_reaction.router, tags=["Post Reactions"])
 app.include_router(api_router)
 
 def custom_openapi():

@@ -75,16 +75,7 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",")]
         return v
 
-    #@validator("GCS_CREDENTIALS_JSON", pre=True)
-    #def validate_gcs_credentials(cls, v):
-    #    try:
-    #        return json.loads(v)
-    #    except json.JSONDecodeError:
-    #        raise ValueError("Invalid GCS credentials JSON format")
-    #    except Exception as e:
-    #        logger.error(f"GCS credentials validation failed: {str(e)}")
-    #
-    #        raise
+
 
     @validator("MAX_CV_SIZE")
     def validate_max_cv_size(cls, v):
@@ -92,11 +83,21 @@ class Settings(BaseSettings):
             raise ValueError("MAX_CV_SIZE cannot exceed 10MB")
         return v
 
+
+        
+    #@property
+    #def GCS_CREDENTIALS_JSON(self) -> Optional[str]:
+    #    """Decode base64 encoded credentials if available"""
+    #    if self.GCS_CREDENTIALS_JSON_B64:
+    #        try:
+    #            return base64.b64decode(self.GCS_CREDENTIALS_JSON_B64).decode('utf-8')
+    #        except Exception as e:
+    #            raise ValueError(f"Failed to decode GCS credentials: {str(e)}")
+    #    return None
+
     class Config:
         env_file = ".env"
         case_sensitive = True
         env_file_encoding = "utf-8"
-        json_loads = json.loads
-        json_dumps = json.dumps
 
 settings = Settings()

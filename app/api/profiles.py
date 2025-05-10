@@ -23,8 +23,14 @@ from app.crud.user import (
     get_profile_completion
 )
 from app.core.config import settings
+<<<<<<< Updated upstream
 from app.utils.file_handling import save_uploaded_file, delete_user_file
 from fastapi.responses import FileResponse
+#from app.utils.file_handling import save_uploaded_file, delete_user_file, bucket
+from fastapi.responses import FileResponse, RedirectResponse
+
+logger = logging.getLogger(__name__)
+>>>>>>> Stashed changes
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
