@@ -75,7 +75,7 @@ async def login(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        user = await get_user_by_email(db, form_data.email)
+        user = await get_user_by_email(db, form_data.username)
         if not user:
             logger.warning(f"Login attempt for non-existent user: {form_data.email}")
             raise HTTPException(
