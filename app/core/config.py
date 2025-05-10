@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     GOOGLE_JWKS_URL: str
     GOOGLE_ISSUER: str
 
-    # Google Cloud Storage Settings
+    Google Cloud Storage Settings
     GCS_PROJECT_ID: str
     GCS_BUCKET_NAME: str
     GCS_BASE_PATH: str = "cvs"
