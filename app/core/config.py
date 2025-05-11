@@ -76,15 +76,15 @@ class Settings(BaseSettings):
             raise ValueError("MAX_CV_SIZE cannot exceed 10MB")
         return v
         
-    #@property
-    #def GCS_CREDENTIALS_JSON(self) -> Optional[str]:
-    #    """Decode base64 encoded credentials if available"""
-    #    if self.GCS_CREDENTIALS_JSON_B64:
-    #        try:
-    #            return base64.b64decode(self.GCS_CREDENTIALS_JSON_B64).decode('utf-8')
-    #        except Exception as e:
-    #            raise ValueError(f"Failed to decode GCS credentials: {str(e)}")
-    #    return None
+    @property
+    def GCS_CREDENTIALS_JSON(self) -> Optional[str]:
+        """Decode base64 encoded credentials if available"""
+        if self.GCS_CREDENTIALS_JSON_B64:
+            try:
+                return base64.b64decode(self.GCS_CREDENTIALS_JSON_B64).decode('utf-8')
+            except Exception as e:
+                raise ValueError(f"Failed to decode GCS credentials: {str(e)}")
+        return None
 
     class Config:
         env_file = ".env"
