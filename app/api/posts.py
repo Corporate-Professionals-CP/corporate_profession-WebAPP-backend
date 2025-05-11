@@ -23,7 +23,8 @@ from app.crud.post import (
     delete_post,
     get_feed_posts,
     get_posts_by_user,
-    search_posts
+    search_posts,
+    enrich_post_data
 )
 from app.core.security import get_current_active_user, get_current_active_admin
 from app.core.config import settings
@@ -70,17 +71,8 @@ async def search_posts_endpoint(
 ):
     """
     Advanced post search with cursor-based pagination
-    ---
-    Example request with cursor:
-    {
-        "query": "python developer",
-        "industry": "Technology",
-        "cursor": "2023-10-05T12:34:56.789,abc123-def456-ghi789",
-        "limit": 50
-    }
     """
     try:
-        # Call the  CRUD method with cursor
         posts, next_cursor = await search_posts(
             session=db,
             current_user=current_user,
@@ -100,57 +92,29 @@ async def search_posts_endpoint(
                 detail="No posts found matching your criteria"
             )
 
-        # Maintain existing serialization logic
-        results = [
-            PostRead(
-                id=post.id,
-                title=post.title,
-                content=post.content,
-                is_active=post.is_active,
-                post_type=post.post_type,
-                job_title=post.job_title,
-                industry=post.industry,
-                experience_level=post.experience_level,
-                status=post.status,
-                visibility=post.visibility,
-                tags=post.tags,
-                engagement=post.engagement,
-                created_at=post.created_at,
-                updated_at=post.updated_at,
-                published_at=post.published_at,
-                expires_at=post.expires_at,
-                user_id=post.user_id,
-                user_name=user.full_name,
-                skills=[skill.name for skill in post.skills]
-            )
-            for post, user in posts
-        ]
+        results = []
+        for post, user in posts:
+            post.user = user  # checking if user is available
+            enriched = await enrich_post_data(db, post)
+            results.append(PostRead(**enriched))
 
         return PostSearchResponse(
             results=results,
             next_cursor=next_cursor
         )
 
-    except HTTPException as e:
-        raise e
+    except HTTPException:
+        raise
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
 
 @router.get("/user/{user_id}", response_model=List[PostRead])
 async def read_user_posts(
     user_id: UUID,
-    include_inactive: bool = Query(
-        False,
-        description="Include inactive posts (admin only)"
-    ),
+    include_inactive: bool = Query(False, description="Include inactive posts (admin only)"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, le=100),
     db: AsyncSession = Depends(get_db),
@@ -158,41 +122,32 @@ async def read_user_posts(
 ):
     """
     Retrieve posts by a specific user with pagination
-    User content visibility
     """
-    # Only allow admins to see inactive posts
     if include_inactive and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can view inactive posts"
         )
-    
+
     posts = await get_posts_by_user(
         db,
         user_id,
         include_inactive=include_inactive,
+        current_user=current_user,
         offset=offset,
         limit=limit
     )
-    
+
     if not posts:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No posts found for this user"
-        )
+        raise HTTPException(status_code=404, detail="No posts found for this user")
 
     response_posts = []
     for post in posts:
-        post_data = PostRead.from_orm(post)
-        if not post.user.hide_profile:
-            post_data.user = {
-                "name": post.user.full_name,
-                "job_title": post.user.job_title,
-                "company": post.user.company
-            }
-        response_posts.append(post_data)
+        enriched = await enrich_post_data(db, post)
+        response_posts.append(PostRead(**enriched))
 
     return response_posts
+
 
 @router.get("/{post_id}", response_model=PostRead)
 async def read_post(
@@ -201,7 +156,6 @@ async def read_post(
 ):
     """
     Get detailed view of a single post
-    Post visibility
     """
     post = await get_post(db, post_id)
     if not post or not post.is_active:
@@ -209,7 +163,10 @@ async def read_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
         )
-    return post
+
+    enriched = await enrich_post_data(db, post)
+    return PostRead(**enriched)
+
 
 @router.put("/{post_id}", response_model=PostRead)
 async def update_existing_post(

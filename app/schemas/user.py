@@ -48,12 +48,6 @@ class UserCreate(UserBase):
             raise ValueError("Passwords do not match")
         return v
 
-    @validator('username')
-    def validate_username(cls, v: str):
-        if not v.isalnum() and "_" not in v:
-            raise ValueError("Username can only contain letters, numbers, and underscores")
-        return v
-
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None

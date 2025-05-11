@@ -25,6 +25,8 @@ class PostBase(BaseModel):
     tags: Optional [List[str]] = Field(default_factory=list)
     skills: Optional [List[str]] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = Field(default="image")
 
     class Config:
         use_enum_values = True
@@ -54,6 +56,13 @@ class PostUpdate(BaseModel):
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
 
+class ReactionBreakdown(BaseModel):
+    like: int = 0
+    love: int = 0
+    insightful: int = 0
+    funny: int = 0
+    congratulations: int = 0
+
 class PostRead(PostBase):
     """Complete post schema for API responses"""
     id: UUID
@@ -65,6 +74,10 @@ class PostRead(PostBase):
     updated_at: datetime
     published_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
+    total_comments: int = 0
+    total_reactions: int = 0
+    reactions_breakdown: ReactionBreakdown | None = None
+
 
     @validator('skills', pre=True)
     def convert_skills(cls, v):
