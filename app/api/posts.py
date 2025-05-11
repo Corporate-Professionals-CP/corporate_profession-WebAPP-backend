@@ -24,7 +24,7 @@ from app.crud.post import (
     get_feed_posts,
     get_posts_by_user,
     search_posts,
-    enrich_post_data
+    enrich_multiple_posts
 )
 from app.core.security import get_current_active_user, get_current_active_admin
 from app.core.config import settings
@@ -69,39 +69,31 @@ async def search_posts_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """
-    Advanced post search with cursor-based pagination
-    """
     try:
-        posts, next_cursor = await search_posts(
-            session=db,
-            current_user=current_user,
-            query=search_params.query,
+        # Parse cursor string into datetime and UUID
+        cursor_time = cursor_id = None
+        if search_params.cursor:
+            try:
+                time_str, id_str = search_params.cursor.rsplit("_", 1)
+                cursor_time = datetime.fromisoformat(time_str)
+                cursor_id = UUID(id_str)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid cursor format")
+
+        response = await search_posts(
+            db=db,
+            search=search_params.query,
             industry=search_params.industry,
-            post_type=search_params.post_type,
+            experience_level=search_params.experience_level,
             job_title=search_params.job_title,
-            created_after=search_params.created_after,
-            end_date=search_params.end_date,
-            cursor=search_params.cursor,
-            limit=search_params.limit
+            post_type=search_params.post_type,
+            skills=search_params.skills,
+            limit=search_params.limit,
+            cursor_time=cursor_time,
+            cursor_id=cursor_id
         )
 
-        if not posts:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No posts found matching your criteria"
-            )
-
-        results = []
-        for post, user in posts:
-            post.user = user  # checking if user is available
-            enriched = await enrich_post_data(db, post)
-            results.append(PostRead(**enriched))
-
-        return PostSearchResponse(
-            results=results,
-            next_cursor=next_cursor
-        )
+        return response
 
     except HTTPException:
         raise
@@ -109,7 +101,6 @@ async def search_posts_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
-
 
 @router.get("/user/{user_id}", response_model=List[PostRead])
 async def read_user_posts(
@@ -129,7 +120,7 @@ async def read_user_posts(
             detail="Only admins can view inactive posts"
         )
 
-    posts = await get_posts_by_user(
+    posts, users = await get_posts_by_user(
         db,
         user_id,
         include_inactive=include_inactive,
@@ -141,12 +132,10 @@ async def read_user_posts(
     if not posts:
         raise HTTPException(status_code=404, detail="No posts found for this user")
 
-    response_posts = []
-    for post in posts:
-        enriched = await enrich_post_data(db, post)
-        response_posts.append(PostRead(**enriched))
+    enriched_posts = await enrich_multiple_posts(db, posts, users)
 
-    return response_posts
+    return enriched_posts
+
 
 
 @router.get("/{post_id}", response_model=PostRead)
@@ -164,8 +153,16 @@ async def read_post(
             detail="Post not found"
         )
 
-    enriched = await enrich_post_data(db, post)
-    return PostRead(**enriched)
+    # Fetch the user who created the post
+    user_result = await db.execute(select(User).where(User.id == post.user_id))
+    user = user_result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Post owner not found")
+
+    enriched = await enrich_multiple_posts(db, [post], [user])
+    return enriched[0]
+
 
 
 @router.put("/{post_id}", response_model=PostRead)

@@ -81,7 +81,7 @@ class Post(SQLModel, table=True):
         sa_column=Column(JSONB, nullable=False, default=lambda: PostEngagement().dict())
     )
     media_url: Optional[str] = None
-    media_type: Optional[str] = Field(default="image")  # or "video"
+    media_type: Optional[str] = Field(default="image", max_length=50)  # or "video"
 
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

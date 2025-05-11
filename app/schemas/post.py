@@ -103,6 +103,7 @@ class PostSearch(BaseModel):
     industry: Optional[Industry] = None
     post_type: Optional[PostType] = None
     job_title: Optional[JobTitle] = None
+    experience_level: Optional[ExperienceLevel] = None
     created_after: Optional[datetime] = Field(
         None, 
         description="Filter posts created after this date"
@@ -112,6 +113,7 @@ class PostSearch(BaseModel):
         None,
         description="Filter posts created before this date"
     )
+    skills: Optional[List[str]] = None
     limit: int = 100 
     cursor: Optional[str] = Field(None, description="Pagination cursor")
 
@@ -121,6 +123,7 @@ class PostSearch(BaseModel):
                 "query": "software engineer",
                 "industry": Industry.TECHNOLOGY,
                 "post_type": PostType.JOB_POSTING,
+                "skills": ["Figma", "UI/UX"],
                 "created_after": "2024-01-01T00:00:00",
                 "limit": 20,
                 "offset": 0
