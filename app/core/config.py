@@ -69,6 +69,7 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",")]
         return v
 
+
     @validator("MAX_CV_SIZE")
     def validate_max_cv_size(cls, v):
         if v > 10 * 1024 * 1024:  # 10MB max

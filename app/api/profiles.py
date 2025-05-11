@@ -31,6 +31,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 
 logger = logging.getLogger(__name__)
 
+
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
 @router.get("/me", response_model=UserRead)

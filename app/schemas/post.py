@@ -25,6 +25,8 @@ class PostBase(BaseModel):
     tags: Optional [List[str]] = Field(default_factory=list)
     skills: Optional [List[str]] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = Field(default="image")
 
     class Config:
         use_enum_values = True
@@ -54,6 +56,13 @@ class PostUpdate(BaseModel):
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
 
+class ReactionBreakdown(BaseModel):
+    like: int = 0
+    love: int = 0
+    insightful: int = 0
+    funny: int = 0
+    congratulations: int = 0
+
 class PostRead(PostBase):
     """Complete post schema for API responses"""
     id: UUID
@@ -65,6 +74,10 @@ class PostRead(PostBase):
     updated_at: datetime
     published_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
+    total_comments: int = 0
+    total_reactions: int = 0
+    reactions_breakdown: ReactionBreakdown | None = None
+
 
     @validator('skills', pre=True)
     def convert_skills(cls, v):
@@ -90,6 +103,7 @@ class PostSearch(BaseModel):
     industry: Optional[Industry] = None
     post_type: Optional[PostType] = None
     job_title: Optional[JobTitle] = None
+    experience_level: Optional[ExperienceLevel] = None
     created_after: Optional[datetime] = Field(
         None, 
         description="Filter posts created after this date"
@@ -99,6 +113,7 @@ class PostSearch(BaseModel):
         None,
         description="Filter posts created before this date"
     )
+    skills: Optional[List[str]] = None
     limit: int = 100 
     cursor: Optional[str] = Field(None, description="Pagination cursor")
 
@@ -108,6 +123,7 @@ class PostSearch(BaseModel):
                 "query": "software engineer",
                 "industry": Industry.TECHNOLOGY,
                 "post_type": PostType.JOB_POSTING,
+                "skills": ["Figma", "UI/UX"],
                 "created_after": "2024-01-01T00:00:00",
                 "limit": 20,
                 "offset": 0

@@ -14,13 +14,16 @@ from sqlalchemy import select, and_, or_, func, desc, cast, JSON, Float, type_co
 
 from fastapi import HTTPException, status
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
+from app.models.post_comment import PostComment
+from app.models.post_reaction import ReactionType, PostReaction
 from app.models.user import User
 from app.models.skill import Skill
 from app.models.follow import UserFollow
-from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead
+from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead, ReactionBreakdown, PostSearchResponse
 from app.schemas.enums import Industry, PostType, JobTitle, PostVisibility
 from app.core.security import get_current_active_user
 from sqlalchemy.orm import selectinload, Mapped
+from collections import defaultdict
 
 async def create_post(
     session: AsyncSession,
@@ -435,133 +438,127 @@ async def get_post_by_id_admin(
     return result.scalar_one_or_none()
 
 async def get_posts_by_user(
-    session: AsyncSession,
+    db: AsyncSession,
     user_id: UUID,
-    *,
     include_inactive: bool = False,
-    current_user: Optional[User] = None,
+    current_user: User = None,
     offset: int = 0,
-    limit: int = 100
-) -> List[Post]:
+    limit: int = 50
+) -> Tuple[List[Post], List[User]]:
     """
-    Get user's posts with visibility controls
-    Profile visibility
+    Retrieve posts by a specific user along with associated user data.
+    Supports inactive post filtering and pagination.
+    Returns:
+        Tuple[List[Post], List[User]]: Posts and their matching authors (in order)
     """
-    query = (
-        select(Post, User)
-        .options(selectinload(Post.user))
-        .where(Post.deleted == False)
-        .join(User)
-        .where(User.id == str(user_id))
-    )
+
+    query = select(Post).where(Post.user_id == str(user_id))  # Convert UUID to string here
 
     if not include_inactive:
         query = query.where(Post.is_active == True)
 
-    # Visibility controls
-    if current_user and str(current_user.id) != str(user_id):
-        query = query.where(
+    query = query.order_by(Post.created_at.desc()).offset(offset).limit(limit)
+    result = await db.execute(query)
+    posts = result.scalars().all()
+
+    if not posts:
+        return [], []
+
+    # Collect all unique user_ids (in this case just one, but generalized)
+    user_ids = {post.user_id for post in posts}
+
+    user_result = await db.execute(
+        select(User).where(User.id.in_(user_ids))
+    )
+    
+    # Fix the issue here: iterate correctly over the result
+    user_map = {user_result.id: user_result for user_result in user_result.scalars().all()}
+
+    # Match each post to the correct user
+    users = [user_map.get(post.user_id) for post in posts]
+
+    return posts, users
+
+
+async def search_posts(
+    db: AsyncSession,
+    search: Optional[str] = None,
+    industry: Optional[str] = None,
+    experience_level: Optional[str] = None,
+    job_title: Optional[str] = None,
+    post_type: Optional[str] = None,
+    skills: Optional[List[str]] = None,
+    limit: int = 10,
+    cursor_time: Optional[datetime] = None,
+    cursor_id: Optional[UUID] = None
+) -> PostSearchResponse:
+    # Build search & filter conditions
+    relevance_conditions = []
+    filter_conditions = []
+
+    if search:
+        search_term = f"%{search.lower()}%"
+        relevance_conditions.append(func.lower(Post.title).like(search_term))
+        relevance_conditions.append(func.lower(Post.content).like(search_term))
+
+    if industry:
+        filter_conditions.append(Post.industry == industry)
+    if experience_level:
+        filter_conditions.append(Post.experience_level == experience_level)
+    if job_title:
+        filter_conditions.append(Post.job_title == job_title)
+    if post_type:
+        filter_conditions.append(Post.post_type == post_type)
+    if skills:
+        for skill in skills:
+            filter_conditions.append(Post.skills.any(Skill.name.ilike(f"%{skill}%")))
+
+    # Base query to get post IDs (pagination applied here)
+    subquery_stmt = select(Post.id).join(User).where(Post.status == PostStatus.PUBLISHED)
+
+    if relevance_conditions:
+        subquery_stmt = subquery_stmt.where(or_(*relevance_conditions))
+    if filter_conditions:
+        subquery_stmt = subquery_stmt.where(and_(*filter_conditions))
+    if cursor_time and cursor_id:
+        subquery_stmt = subquery_stmt.where(
             or_(
-                Post.visibility == "public",
-                and_(
-                    Post.visibility == "industry",
-                    User.industry == current_user.industry
-                )
+                Post.created_at < cursor_time,
+                and_(Post.created_at == cursor_time, Post.id < cursor_id)
             )
         )
 
-    result = await session.execute(
-        query.order_by(Post.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-    
-    return result.scalars().all()
+    subquery_stmt = subquery_stmt.order_by(Post.created_at.desc(), Post.id.desc()).limit(limit)
+    subquery = subquery_stmt.subquery()
 
-async def search_posts(
-    session: AsyncSession,
-    *,
-    current_user: Optional[User] = None,
-    query: Optional[str] = None,
-    industry: Optional[Industry] = None,
-    post_type: Optional[PostType] = None,
-    cursor: Optional[str] = None,
-    limit: int = 100
-) -> Tuple[List[Tuple[Post, User]], Optional[str]]:
-    """Enhanced search with cursor pagination and relevance"""
-    # Cursor parsing (same as get_feed_posts)
-    cursor_time = None
-    cursor_id = None
-    if cursor:
-        try:
-            cursor_time_str, cursor_id = cursor.split(",")
-            cursor_time = datetime.fromisoformat(cursor_time_str)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid cursor format"
-            )
-
-    # Build base query
-    query_stmt = (
+    # Main query: get full posts and user details
+    main_query = (
         select(Post, User)
         .join(User)
         .options(selectinload(Post.skills))
-        .distinct(Post.id)
-        .where(Post.status == PostStatus.PUBLISHED)
+        .where(Post.id.in_(select(subquery.c.id)))
+        .order_by(Post.created_at.desc(), Post.id.desc())
     )
 
-    # Search relevance weights
-    relevance_conditions = []
-    if query:
-        search_terms = query.split()
-        for term in search_terms:
-            term_pattern = f"%{term}%"
-            relevance_conditions.extend([
-                Post.title.ilike(term_pattern),
-                Post.content.ilike(term_pattern),
-                Post.skills.any(Skill.name.ilike(term_pattern))
-            ])
-
-    # Apply filters
-    filter_conditions = []
-    if industry:
-        filter_conditions.append(Post.industry == industry)
-    if post_type:
-        filter_conditions.append(Post.post_type == post_type)
-
-    # Combine conditions
-    if relevance_conditions:
-        query_stmt = query_stmt.where(or_(*relevance_conditions))
-    if filter_conditions:
-        query_stmt = query_stmt.where(and_(*filter_conditions))
-
-    # Cursor pagination
-    if cursor_time and cursor_id:
-        query_stmt = query_stmt.where(
-            or_(
-                Post.created_at < cursor_time,
-                and_(
-                    Post.created_at == cursor_time,
-                    Post.id < cursor_id
-                )
-            )
-        )
-
-    # Execute query
-    result = await session.execute(
-        query_stmt.order_by(Post.created_at.desc(), Post.id.desc())
-        .limit(limit)
-    )
+    result = await db.execute(main_query)
     posts = result.all()
 
-    # Generate next cursor
-    next_cursor = None
-    if posts:
-        last_post = posts[-1][0]
-        next_cursor = f"{last_post.created_at.isoformat()},{last_post.id}"
+    if not posts:
+        return PostSearchResponse(results=[], next_cursor=None)
 
-    return posts, next_cursor
+    post_objs = [p for p, _ in posts]
+    user_objs = [u for _, u in posts]
+
+    enriched_results = await enrich_multiple_posts(db, post_objs, user_objs)
+
+    last_post = post_objs[-1]
+    next_cursor = f"{last_post.created_at.isoformat()}_{last_post.id}" if len(post_objs) == limit else None
+
+    return PostSearchResponse(
+        results=enriched_results,
+        next_cursor=next_cursor
+    )
+
 
 async def search_jobs_by_criteria(
     session: AsyncSession,
@@ -635,6 +632,54 @@ async def get_multi(
         .limit(limit)
     )
     return result.scalars().all()
+
+async def enrich_multiple_posts(db: AsyncSession, posts: List[Post], users: List[User]) -> List[PostRead]:
+    post_ids = [str(post.id) for post in posts]
+
+    # Reactions (bulk fetch)
+    reaction_data = await db.execute(
+        select(
+            PostReaction.post_id,
+            PostReaction.type,
+            func.count(PostReaction.user_id)
+        ).where(PostReaction.post_id.in_(post_ids))
+        .group_by(PostReaction.post_id, PostReaction.type)
+    )
+    reaction_map = {}
+    for pid, rtype, count in reaction_data.all():
+        if pid not in reaction_map:
+            reaction_map[pid] = {}
+        reaction_map[pid][rtype] = count
+
+    # Comments (bulk fetch)
+    comment_data = await db.execute(
+        select(
+            PostComment.post_id,
+            func.count(PostComment.id)
+        ).where(PostComment.post_id.in_(post_ids))
+        .group_by(PostComment.post_id)
+    )
+    comment_map = {pid: count for pid, count in comment_data.all()}
+
+    # Assemble enriched posts
+    enriched = []
+    for post, user in zip(posts, users):
+        enriched_data = {
+            **post.__dict__,
+            "user": user,
+            "total_comments": comment_map.get(str(post.id), 0),
+            "total_reactions": sum(reaction_map.get(str(post.id), {}).values()),
+            "reactions_breakdown": {
+                r: reaction_map.get(str(post.id), {}).get(r, 0)
+                for r in ReactionType.__members__.keys()
+            },
+            "is_active": post.is_active
+        }
+        enriched.append(PostRead(**enriched_data))
+
+    return enriched
+
+
 
 async def increment_post_engagement(
     session: AsyncSession,

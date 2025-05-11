@@ -7,6 +7,7 @@ from app.core.config import settings
 import magic
 import logging
 from datetime import datetime, timedelta
+import base64
 
 logger = logging.getLogger(__name__)
 
