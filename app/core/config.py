@@ -8,6 +8,7 @@ from pydantic import AnyUrl, PostgresDsn, RedisDsn, validator
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 import json
+import base64
 
 class Settings(BaseSettings):
     # Application Metadata
@@ -41,11 +42,11 @@ class Settings(BaseSettings):
     GOOGLE_JWKS_URL: str
     GOOGLE_ISSUER: str
 
-    # Google Cloud Storage Settings
+    #Google Cloud Storage Settings
     GCS_PROJECT_ID: str
     GCS_BUCKET_NAME: str
     GCS_BASE_PATH: str = "cvs"
-    GCS_CREDENTIALS_JSON: Optional[str] = None
+    GCS_CREDENTIALS_JSON_B64: Optional[str] = None
     MAX_CV_SIZE: int = 5 * 1024 * 1024  # 5MB
 
     # Email Service
@@ -55,13 +56,6 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TEMPLATE_ID: Optional[int] = None
     EMAILS_FROM_EMAIL: str
     EMAILS_FROM_NAME: str = "Corporate Professionals"
-
-
-    # Cloudinary Configuration
-    CLOUDINARY_CLOUD_NAME: str
-    CLOUDINARY_API_KEY: str
-    CLOUDINARY_API_SECRET: str
-    CLOUDINARY_FOLDER: str = "cv_uploads"
 
     # Redis (for rate limiting)
     # REDIS_URL: Optional[RedisDsn] = None
@@ -76,14 +70,11 @@ class Settings(BaseSettings):
         return v
 
 
-
     @validator("MAX_CV_SIZE")
     def validate_max_cv_size(cls, v):
         if v > 10 * 1024 * 1024:  # 10MB max
             raise ValueError("MAX_CV_SIZE cannot exceed 10MB")
         return v
-
-
         
     #@property
     #def GCS_CREDENTIALS_JSON(self) -> Optional[str]:
@@ -101,3 +92,4 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
 
 settings = Settings()
+

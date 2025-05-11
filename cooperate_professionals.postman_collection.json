@@ -1,0 +1,4356 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Corporate Professionals WebApp API",
+    "description": "Backend API for connecting corporate professionals and recruiters",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_login_api_auth_login_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/token": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_auth_token_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_login_api_auth_token_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/signup": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Signup",
+        "description": "Email/password signup with verification",
+        "operationId": "signup_api_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/google": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Google Oauth",
+        "operationId": "google_oauth_api_auth_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/signup/google": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Signup With Google",
+        "description": "Google OAuth signup using google-auth library",
+        "operationId": "signup_with_google_api_auth_signup_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreateWithGoogle"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/verify-email": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Verify Email",
+        "operationId": "verify_email_api_auth_verify_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh-token": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Refresh Token",
+        "operationId": "refresh_token_api_auth_refresh_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string",
+                "title": "Refresh Token"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Forgot Password",
+        "operationId": "forgot_password_api_auth_forgot_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_forgot_password_api_auth_forgot_password_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "tags": [
+          "Authentication",
+          "Authentication"
+        ],
+        "summary": "Reset Password",
+        "operationId": "reset_password_api_auth_reset_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordReset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/me": {
+      "get": {
+        "tags": [
+          "Profiles",
+          "profiles"
+        ],
+        "summary": "Get Own Profile",
+        "description": "Get current user's full profile (always visible to owner)",
+        "operationId": "get_own_profile_api_profiles_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/profiles/{user_id}": {
+      "get": {
+        "tags": [
+          "Profiles",
+          "profiles"
+        ],
+        "summary": "Get Profile",
+        "description": "Get user profile with privacy control\n- Full profile for owner/admins\n- Public view respects hide_profile\n- Recruiter tag visibility\n- Minimal info when profile hidden (only name + recruiter tag)",
+        "operationId": "get_profile_api_profiles__user_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/UserRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UserPublic"
+                    }
+                  ],
+                  "title": "Response Get Profile Api Profiles  User Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Profiles",
+          "profiles"
+        ],
+        "summary": "Update Profile",
+        "description": "Update user profile\n- Only owner/admin can update\n- Supports recruiter tag toggle\n- Supports hide profile toggle\n- Validates required fields",
+        "operationId": "update_profile_api_profiles__user_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{user_id}/completion": {
+      "get": {
+        "tags": [
+          "Profiles",
+          "profiles"
+        ],
+        "summary": "Get Profile Completion Status",
+        "description": "Get profile completion percentage\nProfile completion status",
+        "operationId": "get_profile_completion_status_api_profiles__user_id__completion_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileCompletion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{user_id}/cv": {
+      "post": {
+        "tags": [
+          "Profiles",
+          "profiles"
+        ],
+        "summary": "Upload Cv",
+        "description": "Upload or update user CV to Google Cloud Storage\n- Only owner/admin can upload\n- Supports PDF/DOCX files\n- Stores in GCS with proper access control\n- Updates user record with GCS URL",
+        "operationId": "upload_cv_api_profiles__user_id__cv_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_cv_api_profiles__user_id__cv_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Profiles",
+          "profiles"
+        ],
+        "summary": "Delete Cv",
+        "description": "Remove user CV from Google Cloud Storage\n- Deletes file from GCS bucket\n- Clears CV URL from user record",
+        "operationId": "delete_cv_api_profiles__user_id__cv_delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Profiles",
+          "profiles"
+        ],
+        "summary": "Download Cv",
+        "operationId": "download_cv_api_profiles__user_id__cv_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/directory/": {
+      "get": {
+        "tags": [
+          "Directory",
+          "directory"
+        ],
+        "summary": "Search Directory",
+        "description": "Search professionals and job postings with advanced filtering.",
+        "operationId": "search_directory_api_directory__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "industry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Industry"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry"
+            }
+          },
+          {
+            "name": "experience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ExperienceLevel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Experience"
+            }
+          },
+          {
+            "name": "skill",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Skill"
+            }
+          },
+          {
+            "name": "recruiter_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": false,
+              "title": "Recruiter Only"
+            }
+          },
+          {
+            "name": "job_title",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobTitle"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Job Title"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LocationFilter"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Location"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/app__schemas__directory__UserDirectoryItem"
+                      },
+                      {
+                        "$ref": "#/components/schemas/PostRead"
+                      }
+                    ]
+                  },
+                  "title": "Response Search Directory Api Directory  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/posts/": {
+      "post": {
+        "tags": [
+          "Posts",
+          "posts"
+        ],
+        "summary": "Create New Post",
+        "description": "Create a new post in the system.\nAny user can create posts\n\nPost Types:\n- job: Job opportunities (must include industry tag)\n- announcement: Professional announcements\n- update: Career updates\n\nRequired Fields:\n- title: 5-100 characters\n- content: 10-2000 characters\n- post_type: One of [job, announcement, update]\n- industry: Required for job posts\n- job_title: Required for job posts",
+        "operationId": "create_new_post_api_posts__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/posts/search": {
+      "post": {
+        "tags": [
+          "Posts",
+          "posts"
+        ],
+        "summary": "Search Posts Endpoint",
+        "description": "Advanced post search with cursor-based pagination\n---\nExample request with cursor:\n{\n    \"query\": \"python developer\",\n    \"industry\": \"Technology\",\n    \"cursor\": \"2023-10-05T12:34:56.789,abc123-def456-ghi789\",\n    \"limit\": 50\n}",
+        "operationId": "search_posts_endpoint_api_posts_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostSearch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/posts/user/{user_id}": {
+      "get": {
+        "tags": [
+          "Posts",
+          "posts"
+        ],
+        "summary": "Read User Posts",
+        "description": "Retrieve posts by a specific user with pagination\nUser content visibility",
+        "operationId": "read_user_posts_api_posts_user__user_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include inactive posts (admin only)",
+              "default": false,
+              "title": "Include Inactive"
+            },
+            "description": "Include inactive posts (admin only)"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PostRead"
+                  },
+                  "title": "Response Read User Posts Api Posts User  User Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/posts/{post_id}": {
+      "get": {
+        "tags": [
+          "Posts",
+          "posts"
+        ],
+        "summary": "Read Post",
+        "description": "Get detailed view of a single post\nPost visibility",
+        "operationId": "read_post_api_posts__post_id__get",
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Post Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Posts",
+          "posts"
+        ],
+        "summary": "Update Existing Post",
+        "description": "Update an existing post.\nPost management\n\nRules:\n- Only the post author can update their posts\n- Admins can update any post\n- Job posts must maintain industry tag",
+        "operationId": "update_existing_post_api_posts__post_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Post Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Posts",
+          "posts"
+        ],
+        "summary": "Delete Existing Post",
+        "description": "Delete a post (soft delete).\nPost management\n\nRules:\n- Post author can delete their own posts\n- Admins can delete any post",
+        "operationId": "delete_existing_post_api_posts__post_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "user"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Post Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Admin List Users",
+        "description": "List users with advanced filters",
+        "operationId": "admin_list_users_api_admin_users_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "is_verified",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Verified"
+            }
+          },
+          {
+            "name": "recruiter_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recruiter Tag"
+            }
+          },
+          {
+            "name": "industry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Industry"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry"
+            }
+          },
+          {
+            "name": "experience_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ExperienceLevel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Experience Level"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/app__schemas__user__UserDirectoryItem"
+                  },
+                  "title": "Response Admin List Users Api Admin Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/bulk-actions": {
+      "post": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Bulk User Actions",
+        "description": "Bulk user actions (activate/deactivate/verify)",
+        "operationId": "bulk_user_actions_api_admin_users_bulk_actions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "type": "object",
+                  "title": "Response Bulk User Actions Api Admin Users Bulk Actions Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/users/{user_id}/deactivate": {
+      "post": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Deactivate User",
+        "operationId": "deactivate_user_api_admin_users__user_id__deactivate_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}/activate": {
+      "post": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Activate User",
+        "operationId": "activate_user_api_admin_users__user_id__activate_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}": {
+      "put": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Admin Update User",
+        "operationId": "admin_update_user_api_admin_users__user_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/posts/": {
+      "get": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Admin List Posts",
+        "operationId": "admin_list_posts_api_admin_posts__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "industry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Industry"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PostRead"
+                  },
+                  "title": "Response Admin List Posts Api Admin Posts  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/posts/{post_id}/visibility": {
+      "patch": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Admin Update Post Visibility",
+        "operationId": "admin_update_post_visibility_api_admin_posts__post_id__visibility_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Post Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_admin_update_post_visibility_api_admin_posts__post_id__visibility_patch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/posts/{post_id}": {
+      "delete": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Admin Delete Post",
+        "description": "Admin-only post deletion (soft delete)",
+        "operationId": "admin_delete_post_api_admin_posts__post_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Post Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/dropdowns": {
+      "get": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Get Dropdown Options",
+        "description": "Get current dropdown options using enums and skill model",
+        "operationId": "get_dropdown_options_api_admin_dropdowns_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DropdownUpdate"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/metrics": {
+      "get": {
+        "tags": [
+          "Admin",
+          "admin"
+        ],
+        "summary": "Get Admin Metrics",
+        "description": "Get system metrics",
+        "operationId": "get_admin_metrics_api_admin_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMetrics"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": [
+              "admin"
+            ]
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/feed/": {
+      "get": {
+        "tags": [
+          "Feed",
+          "feed"
+        ],
+        "summary": "Get Personalized Feed",
+        "description": "Personalized feed with:\n- Followed users' posts\n- Industry-relevant content\n- Skill-matched posts\n- Engagement-based ranking\n- Fresh posts highlight\n- Cursor pagination",
+        "operationId": "get_personalized_feed_api_feed__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "post_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PostType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by post type: job, announcement, or update",
+              "title": "Post Type"
+            },
+            "description": "Filter by post type: job, announcement, or update"
+          },
+          {
+            "name": "recent_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 365,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter posts from last N days",
+              "title": "Recent Days"
+            },
+            "description": "Filter posts from last N days"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pagination cursor (format: 'timestamp,post_id')",
+              "title": "Cursor"
+            },
+            "description": "Pagination cursor (format: 'timestamp,post_id')"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{user_id}/follow": {
+      "post": {
+        "tags": [
+          "follow",
+          "follow"
+        ],
+        "summary": "Follow User",
+        "operationId": "follow_user_api_users__user_id__follow_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Follow User Api Users  User Id  Follow Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{user_id}/unfollow": {
+      "delete": {
+        "tags": [
+          "follow",
+          "follow"
+        ],
+        "summary": "Unfollow User",
+        "operationId": "unfollow_user_api_users__user_id__unfollow_delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Unfollow User Api Users  User Id  Unfollow Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/following": {
+      "get": {
+        "tags": [
+          "follow",
+          "follow"
+        ],
+        "summary": "Get Following",
+        "operationId": "get_following_api_users_me_following_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FollowingResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Following Api Users Me Following Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/followers": {
+      "get": {
+        "tags": [
+          "follow",
+          "follow"
+        ],
+        "summary": "Get Followers",
+        "operationId": "get_followers_api_users_me_followers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FollowerResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Followers Api Users Me Followers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdminMetrics": {
+        "properties": {
+          "total_users": {
+            "type": "integer",
+            "title": "Total Users"
+          },
+          "active_users": {
+            "type": "integer",
+            "title": "Active Users"
+          },
+          "new_users_24h": {
+            "type": "integer",
+            "title": "New Users 24H"
+          },
+          "recruiters": {
+            "type": "integer",
+            "title": "Recruiters"
+          },
+          "total_posts": {
+            "type": "integer",
+            "title": "Total Posts"
+          },
+          "active_posts": {
+            "type": "integer",
+            "title": "Active Posts"
+          },
+          "profile_completion_rate": {
+            "type": "number",
+            "title": "Profile Completion Rate"
+          },
+          "recent_signups": {
+            "items": {
+              "$ref": "#/components/schemas/UserRead"
+            },
+            "type": "array",
+            "title": "Recent Signups"
+          },
+          "recent_posts": {
+            "items": {
+              "$ref": "#/components/schemas/PostRead"
+            },
+            "type": "array",
+            "title": "Recent Posts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_users",
+          "active_users",
+          "new_users_24h",
+          "recruiters",
+          "total_posts",
+          "active_posts",
+          "profile_completion_rate",
+          "recent_signups",
+          "recent_posts"
+        ],
+        "title": "AdminMetrics"
+      },
+      "Body_admin_update_post_visibility_api_admin_posts__post_id__visibility_patch": {
+        "properties": {
+          "visibility": {
+            "$ref": "#/components/schemas/PostVisibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "visibility"
+        ],
+        "title": "Body_admin_update_post_visibility_api_admin_posts__post_id__visibility_patch"
+      },
+      "Body_forgot_password_api_auth_forgot_password_post": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "Body_forgot_password_api_auth_forgot_password_post"
+      },
+      "Body_login_api_auth_login_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_login_api_auth_login_post"
+      },
+      "Body_login_api_auth_token_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_login_api_auth_token_post"
+      },
+      "Body_upload_cv_api_profiles__user_id__cv_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_cv_api_profiles__user_id__cv_post"
+      },
+      "BulkActionRequest": {
+        "properties": {
+          "user_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "User Ids"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_ids",
+          "action"
+        ],
+        "title": "BulkActionRequest"
+      },
+      "DropdownUpdate": {
+        "properties": {
+          "job_titles": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/JobTitle"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Titles"
+          },
+          "industries": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Industry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industries"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          },
+          "experience_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExperienceLevel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience Levels"
+          }
+        },
+        "type": "object",
+        "title": "DropdownUpdate"
+      },
+      "EducationLevel": {
+        "type": "string",
+        "enum": [
+          "High School",
+          "Associate Degree",
+          "Bachelor's Degree",
+          "Master's Degree",
+          "PhD/Doctorate",
+          "Professional Certification",
+          "Other"
+        ],
+        "title": "EducationLevel",
+        "description": "Highest education attainment.\nReference: Education"
+      },
+      "EmailVerify": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "EmailVerify",
+        "description": "Email verification request"
+      },
+      "ExperienceLevel": {
+        "type": "string",
+        "enum": [
+          "0-2 years",
+          "3-5 years",
+          "6-10 years",
+          "10+ years"
+        ],
+        "title": "ExperienceLevel",
+        "description": "Professional experience ranges.\nReference: Years of Experience"
+      },
+      "FeedResponse": {
+        "properties": {
+          "main_posts": {
+            "items": {
+              "$ref": "#/components/schemas/PostRead"
+            },
+            "type": "array",
+            "title": "Main Posts"
+          },
+          "fresh_posts": {
+            "items": {
+              "$ref": "#/components/schemas/PostRead"
+            },
+            "type": "array",
+            "title": "Fresh Posts"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "main_posts",
+          "fresh_posts"
+        ],
+        "title": "FeedResponse"
+      },
+      "FollowerResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "is_verified": {
+            "type": "boolean",
+            "title": "Is Verified"
+          },
+          "is_following": {
+            "type": "boolean",
+            "title": "Is Following"
+          },
+          "mutual_followers_count": {
+            "type": "integer",
+            "title": "Mutual Followers Count"
+          },
+          "latest_mutual_connections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Latest Mutual Connections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "full_name",
+          "bio",
+          "is_verified",
+          "is_following",
+          "mutual_followers_count",
+          "latest_mutual_connections"
+        ],
+        "title": "FollowerResponse"
+      },
+      "FollowingResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "is_verified": {
+            "type": "boolean",
+            "title": "Is Verified"
+          },
+          "is_following_you": {
+            "type": "boolean",
+            "title": "Is Following You"
+          },
+          "mutual_followers_count": {
+            "type": "integer",
+            "title": "Mutual Followers Count"
+          },
+          "latest_mutual_connections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Latest Mutual Connections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "full_name",
+          "bio",
+          "is_verified",
+          "is_following_you",
+          "mutual_followers_count",
+          "latest_mutual_connections"
+        ],
+        "title": "FollowingResponse"
+      },
+      "Gender": {
+        "type": "string",
+        "enum": [
+          "Male",
+          "Female",
+          "Non-binary",
+          "Prefer not to say",
+          "Other"
+        ],
+        "title": "Gender",
+        "description": "Gender identity options with inclusive default.\nSex"
+      },
+      "GoogleToken": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "title": "Id Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token"
+        ],
+        "title": "GoogleToken",
+        "description": "Google OAuth token response"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Industry": {
+        "type": "string",
+        "enum": [
+          "Technology",
+          "Finance",
+          "Healthcare",
+          "Education",
+          "Manufacturing",
+          "Consulting",
+          "Government",
+          "Nonprofit",
+          "Other"
+        ],
+        "title": "Industry",
+        "description": "Industry classification for professionals.\nReference: Section Profile fields"
+      },
+      "JobTitle": {
+        "type": "string",
+        "enum": [
+          "Software Engineer",
+          "Backend Developer",
+          "Frontend Developer",
+          "DevOps Engineer",
+          "Product Manager",
+          "Data Scientist",
+          "UX Designer",
+          "Financial Analyst",
+          "Marketing Director",
+          "HR Manager",
+          "Sales Executive",
+          "Chief Executive Officer",
+          "Chief Technology Officer",
+          "Other"
+        ],
+        "title": "JobTitle",
+        "description": "Common professional job titles.\nJob Title dropdown"
+      },
+      "Location": {
+        "type": "string",
+        "enum": [
+          "NIGERIA",
+          "United States",
+          "United Kingdom",
+          "Canada",
+          "Australia",
+          "Germany",
+          "France",
+          "India",
+          "Singapore",
+          "Remote",
+          "Other"
+        ],
+        "title": "Location",
+        "description": "Common locations (countries/states).\nLocation dropdown"
+      },
+      "LocationFilter": {
+        "properties": {
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "title": "LocationFilter",
+        "description": "Structured location filtering"
+      },
+      "PasswordReset": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "new_password": {
+            "type": "string",
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "title": "PasswordReset",
+        "description": "Password reset request"
+      },
+      "PostCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 5,
+            "title": "Title"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Content"
+          },
+          "post_type": {
+            "$ref": "#/components/schemas/PostType"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/PostVisibility",
+            "default": "public"
+          },
+          "experience_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "content",
+          "post_type"
+        ],
+        "title": "PostCreate",
+        "description": "Schema for post creation requests"
+      },
+      "PostRead": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 5,
+            "title": "Title"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Content"
+          },
+          "post_type": {
+            "$ref": "#/components/schemas/PostType"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/PostVisibility",
+            "default": "public"
+          },
+          "experience_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "content",
+          "post_type",
+          "skills",
+          "id",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PostRead",
+        "description": "Complete post schema for API responses"
+      },
+      "PostSearch": {
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query",
+            "description": "Search by keywords in title/content"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created After",
+            "description": "Filter posts created after this date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date",
+            "description": "Filter posts created before this date"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 100
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor",
+            "description": "Pagination cursor"
+          }
+        },
+        "type": "object",
+        "title": "PostSearch",
+        "description": "Schema for post search/filter parameters",
+        "example": {
+          "created_after": "2024-01-01T00:00:00",
+          "industry": "Technology",
+          "limit": 20,
+          "offset": 0,
+          "post_type": "Job Opportunity",
+          "query": "software engineer"
+        }
+      },
+      "PostSearchResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/PostRead"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "PostSearchResponse"
+      },
+      "PostType": {
+        "type": "string",
+        "enum": [
+          "Job Opportunity",
+          "Industry News",
+          "Professional Update",
+          "Question",
+          "Discussion",
+          "Other"
+        ],
+        "title": "PostType",
+        "description": "Types of content posts users can create.\nPosting & Feed"
+      },
+      "PostUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 5
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "post_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "experience_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "PostUpdate",
+        "description": "Schema for post updates (all fields optional)"
+      },
+      "PostVisibility": {
+        "type": "string",
+        "enum": [
+          "public",
+          "industry",
+          "followers",
+          "private"
+        ],
+        "title": "PostVisibility",
+        "description": "Controls who can see the post.\nFeed visibility"
+      },
+      "ProfileVisibility": {
+        "type": "string",
+        "enum": [
+          "Public",
+          "Private",
+          "Hidden"
+        ],
+        "title": "ProfileVisibility",
+        "description": "Profile visibility settings for GDPR compliance.\nHide Profile"
+      },
+      "Token": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "expires_at"
+        ],
+        "title": "Token",
+        "description": "Complete token response"
+      },
+      "UserCreate": {
+        "properties": {
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\+?[\\d\\s-]{10,15}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 3,
+                "pattern": "^[a-zA-Z0-9_]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "years_of_experience": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "education": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EducationLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recruiter_tag": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recruiter Tag",
+            "default": false
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          },
+          "password_confirmation": {
+            "type": "string",
+            "format": "password",
+            "title": "Password Confirmation",
+            "writeOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "username",
+          "password",
+          "password_confirmation"
+        ],
+        "title": "UserCreate"
+      },
+      "UserCreateWithGoogle": {
+        "properties": {
+          "google_token": {
+            "type": "string",
+            "title": "Google Token"
+          },
+          "recruiter_tag": {
+            "type": "boolean",
+            "title": "Recruiter Tag",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "google_token"
+        ],
+        "title": "UserCreateWithGoogle",
+        "description": "User creation schema for Google OAuth"
+      },
+      "UserProfileCompletion": {
+        "properties": {
+          "completion_percentage": {
+            "type": "number",
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Completion Percentage"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Fields"
+          },
+          "sections": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "completion_percentage"
+        ],
+        "title": "UserProfileCompletion",
+        "description": "Schema for profile completion status\nProfile Completion"
+      },
+      "UserPublic": {
+        "properties": {
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\+?[\\d\\s-]{10,15}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 3,
+                "pattern": "^[a-zA-Z0-9_]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "years_of_experience": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "education": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EducationLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recruiter_tag": {
+            "type": "boolean",
+            "title": "Recruiter Tag"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "profile_completion": {
+            "type": "number",
+            "title": "Profile Completion",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ProfileVisibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "username",
+          "industry",
+          "years_of_experience",
+          "location",
+          "education",
+          "recruiter_tag",
+          "id",
+          "created_at",
+          "visibility"
+        ],
+        "title": "UserPublic"
+      },
+      "UserRead": {
+        "properties": {
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\+?[\\d\\s-]{10,15}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 3,
+                "pattern": "^[a-zA-Z0-9_]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle",
+                "maxLength": 100,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "years_of_experience": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "education": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EducationLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recruiter_tag": {
+            "type": "boolean",
+            "title": "Recruiter Tag"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "profile_completion": {
+            "type": "number",
+            "title": "Profile Completion",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ProfileVisibility"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "is_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Verified"
+          },
+          "is_admin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Admin"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "username",
+          "industry",
+          "years_of_experience",
+          "location",
+          "education",
+          "recruiter_tag",
+          "id",
+          "created_at",
+          "visibility",
+          "is_verified",
+          "is_admin",
+          "updated_at"
+        ],
+        "title": "UserRead"
+      },
+      "UserUpdate": {
+        "properties": {
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "years_of_experience": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienceLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "education": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EducationLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "age": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gender"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "certifications": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certifications"
+          },
+          "linkedin_profile": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2083,
+                "minLength": 1,
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linkedin Profile"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfileVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recruiter_tag": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recruiter Tag"
+          },
+          "is_admin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Admin"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "app__schemas__directory__UserDirectoryItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "is_recruiter": {
+            "type": "boolean",
+            "title": "Is Recruiter"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "full_name",
+          "job_title",
+          "company",
+          "industry",
+          "is_recruiter"
+        ],
+        "title": "UserDirectoryItem",
+        "description": "Minimal user data for directory listings"
+      },
+      "app__schemas__user__UserDirectoryItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobTitle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Industry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "full_name",
+          "job_title",
+          "company",
+          "industry"
+        ],
+        "title": "UserDirectoryItem"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "tokenUrl": "/api/auth/token",
+            "scopes": {
+              "user": "Regular user access",
+              "recruiter": "Recruiter privileges",
+              "admin": "Admin privileges"
+            }
+          }
+        }
+      }
+    }
+  }
+}

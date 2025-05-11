@@ -35,36 +35,60 @@ from app.schemas.enums import (
     JobTitle,
 )
 
-
-async def create_user(session: AsyncSession, user_data: UserCreate) -> User:
+async def create_user(session: AsyncSession, user_data: Union[UserCreate, dict]) -> User:
     """
     Create a new user account with full validation
+    Supports both UserCreate (email/password) and dict (Google OAuth) inputs
     """
-    existing_user = await get_user_by_email(session, user_data.email)
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-
-    # Use User model's set_password method directly
-    db_user = User(
-        **user_data.dict(exclude={"password", "password_confirmation"})
-    )
-    db_user.set_password(user_data.password.get_secret_value())
-
     try:
+        # Extract email based on input type
+        if isinstance(user_data, dict):
+            email = user_data.get("email")
+            if not email:
+                raise ValueError("Email is required for user creation")
+            existing_user = await get_user_by_email(session, email)
+        else:
+            existing_user = await get_user_by_email(session, user_data.email)
+
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+
+        # Handle different input types
+        if isinstance(user_data, dict):
+            # Directly create from dictionary (Google OAuth)
+            db_user = User(**user_data)
+        else:
+            # Handle email/password signup
+            user_dict = user_data.dict(exclude={"password", "password_confirmation"})
+            db_user = User(**user_dict)
+            db_user.set_password(user_data.password.get_secret_value())
+
         session.add(db_user)
         await session.commit()
         await session.refresh(db_user)
         return db_user
+
     except IntegrityError as e:
         await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Database integrity error: {str(e)}"
         )
-
+    except ValueError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating user: {str(e)}"
+        )
 
 async def get_user_by_id(session: AsyncSession, user_id: UUID) -> Optional[User]:
     """Retrieve user by UUID with eager loading of relationships"""
