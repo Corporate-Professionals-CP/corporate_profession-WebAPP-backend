@@ -4,7 +4,16 @@ from collections import defaultdict
 # Define your API endpoints data structure
 api_endpoints = [
     # Authentication
-    {"method": "POST", "path": "/api/auth/login", "name": "Login"},
+    {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "name": "Login"
+        "body": {
+            "username": "string",
+            "password": "your password"
+        }
+    },
+
     {"method": "POST", "path": "/api/auth/token", "name": "Login"},
     {"method": "POST", "path": "/api/auth/google", "name": "Google Oauth"},
     {"method": "POST", "path": "/api/auth/signup", "name": "Signup"},
@@ -54,7 +63,7 @@ api_endpoints = [
     {"method": "POST", "path": "/api/users/{user_id}/follow", "name": "Follow User Endpoint"},
     {"method": "DELETE", "path": "/api/users/{user_id}/unfollow", "name": "Unfollow User Endpoint"},
     {"method": "GET", "path": "/api/users/me/following", "name": "Get Following Endpoint"},
-    {"mehtod": "GET", "path": "/api/users/me/followers", "name": "Get Followers Endpoint"},
+    {"method": "GET", "path": "/api/users/me/followers", "name": "Get Followers Endpoint"},
 ]
 
 def create_postman_collection():

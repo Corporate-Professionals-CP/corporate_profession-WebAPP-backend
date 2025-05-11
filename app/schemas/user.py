@@ -18,9 +18,23 @@ class UserBase(BaseModel):
     username: Optional[str] = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
     company: Optional[str] = Field(None, min_length=2, max_length=100)
     job_title: Optional[JobTitle] = Field(None, min_length=2, max_length=100)
+    bio: Optional[str] = Field(
+        None,
+        max_length=500,
+        example="Marketing professional passionate about brand growth"
+    )
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
     location: Optional[Location] = None
+    visibility: Optional[ProfileVisibility] = Field(
+        default_factory=lambda: [ProfileVisibility.PUBLIC],
+        description="Who should see your profile?"
+    )
+    topics: Optional[List[str]] = Field(
+        None,
+        description="Selected interest topics",
+        example=["Leadership & Management", "Artificial Intelligence & Automation", "Software Engineering"]
+    )
     education: Optional[EducationLevel] = None
     recruiter_tag: Optional[bool] = False
 
@@ -73,6 +87,7 @@ class UserUpdate(BaseModel):
     visibility: Optional[ProfileVisibility] = None
     recruiter_tag: Optional[bool] = None
     is_admin: Optional[bool] = None
+    topics: Optional [List[str]] = Field(default_factory=list)
     is_active: Optional[bool] = None
 
 class UserPublic(UserBase):
@@ -85,7 +100,8 @@ class UserPublic(UserBase):
     profile_completion: float = Field(0.0)  # Default value
     created_at: datetime
     recruiter_tag: bool
-    visibility: ProfileVisibility
+    topics: Optional[List[str]] = Field(default_factory=list)
+    visibility: Optional[ProfileVisibility]
 
     @classmethod
     def from_orm(cls, user):
@@ -96,6 +112,7 @@ class UserPublic(UserBase):
 
     class Config:
         from_attributes = True
+        use_enum_values = True
 
 class UserRead(UserPublic):
     is_active: Optional[bool] = None

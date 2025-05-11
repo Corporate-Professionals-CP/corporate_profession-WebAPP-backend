@@ -12,7 +12,7 @@ import base64
 logger = logging.getLogger(__name__)
 
 # Initialize GCS client using environment variables
-"""
+""
 try:
     # Load credentials from environment variable
     credentials_info = json.loads(settings.GCS_CREDENTIALS_JSON)
@@ -26,13 +26,13 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize GCS client: {str(e)}")
     raise RuntimeError("Could not initialize cloud storage")
-"""
+
 
 ALLOWED_MIME_TYPES = {
     "application/pdf": "pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"
 }
-"""
+""
 async def save_uploaded_file(file: UploadFile, user_id: str) -> str:
     """Upload file to Google Cloud Storage with validation"""
     try:

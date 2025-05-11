@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, Any, Dict
 
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field, Relationship, Column, JSON
 from sqlalchemy.orm import Mapped, relationship
 from passlib.context import CryptContext
 
@@ -35,13 +35,32 @@ class UserBase(SQLModel):
     email: Optional[str] = Field(None, regex=r"^[^@]+@[^@]+\.[^@]+$")
     username: Optional[str] = Field(None, min_length=3, max_length=50, regex=r"^[a-zA-Z0-9_]+$")
     phone: Optional[str] = Field(None, regex=r"^\+?[\d\s-]{10,15}$")
-    bio: Optional[str] = Field(None, max_length=500)
+    bio: Optional[str] = Field(
+        None, 
+        max_length=500,
+        description="Professional bio/introduction"
+    )
     company: Optional[str] = Field(default=None, min_length=2, max_length=100)
     job_title: Optional[str] = Field(default=None, min_length=2, max_length=100)
     industry: Optional[Industry] = Field(default=None)
     years_of_experience: Optional[ExperienceLevel] = Field(default=None)
     location: Optional[Location] = Field(default=None, min_length=2, max_length=100)
     education: Optional[EducationLevel] = Field(default=None)
+    visibility: Optional[ProfileVisibility] = Field(
+        default=ProfileVisibility.PUBLIC,
+        description="Profile visibility preference"
+    )
+    topics: Optional[List[str]] = Field(
+        None,
+        sa_column=Column(JSON),
+        description="User's selected interest topics"
+    )
+    profile_preferences: Dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description="User's privacy and notification preferences"
+    )
+
 
 
 class User(UserBase, table=True):
@@ -83,6 +102,17 @@ class User(UserBase, table=True):
             "secondaryjoin": "User.id == UserFollow.follower_id",
             "lazy": "selectin"
         }
+    )
+
+    work_life_balance_prefs: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description="Work-life balance preferences"
+    )
+    mentorship_prefs: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description="Mentorship preferences"
     )
 
     age: Optional[int] = Field(None, ge=18, le=100)
@@ -127,11 +157,11 @@ class User(UserBase, table=True):
         required_fields = [
             'full_name', 'job_title', 'industry',
             'years_of_experience', 'location', 'education',
-            'company', 'bio'
+            'company', 'bio', 'visibility'
         ]
         optional_fields = [
             'email', 'phone', 'certifications',
-            'linkedin_profile', 'cv_url'
+            'linkedin_profile', 'cv_url', 'topics'
         ]
 
         completed = 0
