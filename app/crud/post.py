@@ -17,7 +17,7 @@ from app.models.post import Post, PostStatus, PostEngagement, PostPublic
 from app.models.user import User
 from app.models.skill import Skill
 from app.models.follow import UserFollow
-from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead
+from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead, ReactionBreakdown
 from app.schemas.enums import Industry, PostType, JobTitle, PostVisibility
 from app.core.security import get_current_active_user
 from sqlalchemy.orm import selectinload, Mapped
@@ -635,6 +635,31 @@ async def get_multi(
         .limit(limit)
     )
     return result.scalars().all()
+
+async def enrich_post_data(db: AsyncSession, post: Post) -> dict:
+    # Count comments
+    comment_count = await db.scalar(select(func.count()).select_from(PostComment).where(PostComment.post_id == post.id))
+
+    # Count reactions
+    total_reactions = await db.scalar(select(func.count()).select_from(PostReaction).where(PostReaction.post_id == post.id))
+
+    # Get breakdown
+    result = await db.execute(
+        select(PostReaction.type, func.count())
+        .where(PostReaction.post_id == post.id)
+        .group_by(PostReaction.type)
+    )
+    breakdown_data = dict(result.all())
+
+    return {
+        **post.dict(),
+        "total_comments": comment_count,
+        "total_reactions": total_reactions,
+        "reactions_breakdown": {
+            k.lower(): breakdown_data.get(k, 0) for k in ReactionType.__members__
+        }
+    }
+
 
 async def increment_post_engagement(
     session: AsyncSession,

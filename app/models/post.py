@@ -80,6 +80,9 @@ class Post(SQLModel, table=True):
         default=PostEngagement().dict(),
         sa_column=Column(JSONB, nullable=False, default=lambda: PostEngagement().dict())
     )
+    media_url: Optional[str] = None
+    media_type: Optional[str] = Field(default="image")  # or "video"
+
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(
@@ -161,6 +164,9 @@ class PostCreate(SQLModel):
     tags: List[str] = []
     job_title: Optional[JobTitle] = None
     expires_at: Optional[datetime] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = Field(default="image")  # or "video"
+
 
     @validator('tags')
     def validate_tags(cls, v):
