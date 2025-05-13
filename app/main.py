@@ -6,7 +6,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.exceptions import RequestValidationError
 from app.core.config import settings
 from app.db.database import init_db, async_engine
-from app.api import auth, admin, comments, contacts, directory, feed, follow, posts, post_reaction, profiles, volunteering, work_experiences
+from app.api import auth, admin, certification, comments, contacts, directory, education, feed, follow, posts, post_reaction, profiles, skill, skill_catalog, volunteering, work_experiences
 from app.core.exceptions import validation_exception_handler, http_exception_handler
 from fastapi.exception_handlers import http_exception_handler as default_http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -56,16 +56,20 @@ app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 api_router = APIRouter(prefix="/api")
 api_router.include_router(auth.router, tags=["Authentication"])
 api_router.include_router(admin.router, tags=["Admin"])
+api_router.include_router(certification.router, tags=["certification"])
 api_router.include_router(comments.router, tags=["Comments"])
 api_router.include_router(contacts.router, tags=["contacts"])
 api_router.include_router(directory.router, tags=["Directory"])
-api_router.include_router(feed.router, tags=["Feed"])
-api_router.include_router(follow.router, tags=["Follow"])
+api_router.include_router(education.router, tags=["education"])
+api_router.include_router(feed.router, tags=["feed"])
+api_router.include_router(follow.router, tags=["follow"])
 api_router.include_router(posts.router, tags=["Posts"])
 api_router.include_router(profiles.router, tags=["Profiles"])
 api_router.include_router(post_reaction.router, tags=["Post Reactions"])
+api_router.include_router(skill.router, tags=["skill"])
+api_router.include_router(skill_catalog.router, tags=["skills"])
 api_router.include_router(volunteering.router, tags=["volunteering"])
-api_router.include_router(work_experiences.router, tags=["Work Experineces"])
+api_router.include_router(work_experiences.router, tags=["Work Experiences"])
 app.include_router(api_router)
 
 def custom_openapi():

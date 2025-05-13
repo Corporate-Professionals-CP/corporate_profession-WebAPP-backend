@@ -8,6 +8,10 @@ from passlib.context import CryptContext
 from app.models.contact import Contact
 from app.models.follow import UserFollow
 from app.models.skill import Skill, UserSkill
+from app.models.education import Education
+from app.models.volunteering import Volunteering
+from app.models.work_experience import WorkExperience
+from app.models.certification import Certification
 from app.schemas.enums import (
     Industry,
     ExperienceLevel,
@@ -87,8 +91,13 @@ class User(UserBase, table=True):
         sa_relationship_kwargs={"lazy": "selectin"}
     )
 
+    educations: Mapped[List[Education]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
-    skills: List["Skill"] = Relationship(
+
+    skills: Mapped[List["Skill"]] = Relationship(
         back_populates="users",
         link_model=UserSkill,
         sa_relationship=relationship(
@@ -96,6 +105,11 @@ class User(UserBase, table=True):
             secondary="userskill",
             lazy="selectin"
         )
+    )
+
+    certifications: Mapped[List["Certification"]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     following: List["User"] = Relationship(
@@ -131,7 +145,6 @@ class User(UserBase, table=True):
 
     age: Optional[int] = Field(None, ge=18, le=100)
     sex: Gender = Field(default=Gender.PREFER_NOT_TO_SAY)
-    certifications: Optional[str] = Field(None, max_length=500)
     linkedin_profile: Optional[str] = Field(None, regex=r"^https?://(www\.)?linkedin\.com/.*$")
     cv_url: Optional[str] = None
     cv_uploaded_at: Optional[datetime] = None
