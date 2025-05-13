@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, EmailStr, SecretStr, validator, Field, HttpUrl
+from pydantic import BaseModel, EmailStr, SecretStr, validator, Field, HttpUrl, field_serializer
 from app.schemas.enums import (
     Industry,
     ExperienceLevel,
@@ -10,6 +10,7 @@ from app.schemas.enums import (
     JobTitle,
     EducationLevel
 )
+from app.schemas.skill import SkillRead
 
 class UserBase(BaseModel):
     full_name: Optional[str] = Field(..., min_length=2, max_length=100)
@@ -89,19 +90,12 @@ class UserPublic(UserBase):
     years_of_experience: Optional[ExperienceLevel]
     location: Optional[Location]
     education: Optional[EducationLevel]
-    skills: List[str] = Field(default_factory=list)
+    skills: List[SkillRead] = []
     profile_completion: float = Field(0.0)  # Default value
     created_at: datetime
     recruiter_tag: bool
     topics: Optional[List[str]] = Field(default_factory=list)
     visibility: Optional[ProfileVisibility]
-
-    @classmethod
-    def from_orm(cls, user):
-        return cls(
-            skills=[skill.name for skill in user.skills],
-            **super().from_orm(user).dict()
-        )
 
     class Config:
         from_attributes = True
@@ -112,11 +106,6 @@ class UserRead(UserPublic):
     is_verified: Optional[bool]
     is_admin: Optional[bool]
     updated_at: datetime
-
-    @classmethod
-    def from_orm(cls, user):
-        base = super().from_orm(user)
-        return cls(**base.dict())
 
 class UserDirectoryItem(BaseModel):
     id: str

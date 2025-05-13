@@ -6,7 +6,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.exceptions import RequestValidationError
 from app.core.config import settings
 from app.db.database import init_db, async_engine
-from app.api import auth, admin, certification, comments, contacts, directory, education, feed, follow, posts, post_reaction, profiles, skill, skill_catalog, volunteering, work_experiences
+from app.api import auth, admin, bookmarks, certification, comments, contacts, directory, education, feed, follow, posts, post_reaction, profiles, skill, skill_catalog, volunteering, work_experiences
 from app.core.exceptions import validation_exception_handler, http_exception_handler
 from fastapi.exception_handlers import http_exception_handler as default_http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -56,6 +56,7 @@ app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 api_router = APIRouter(prefix="/api")
 api_router.include_router(auth.router, tags=["Authentication"])
 api_router.include_router(admin.router, tags=["Admin"])
+api_router.include_router(bookmarks.router, tags=["bookmarks"])
 api_router.include_router(certification.router, tags=["certification"])
 api_router.include_router(comments.router, tags=["Comments"])
 api_router.include_router(contacts.router, tags=["contacts"])

@@ -13,3 +13,9 @@ class SkillUpdateRequest(BaseModel):
 class SkillCreateRequest(BaseModel):
     names: List[str]
 
+class SkillRead(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True

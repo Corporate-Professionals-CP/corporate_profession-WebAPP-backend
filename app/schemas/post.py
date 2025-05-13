@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from app.schemas.user import UserPublic
 from app.schemas.enums import Industry, PostType, ExperienceLevel, JobTitle, PostVisibility
 from pydantic import validator
@@ -38,7 +38,7 @@ class PostCreate(PostBase):
         if values.get('post_type') == PostType.JOB_POSTING:
             if v is None:
                 raise ValueError("Job posts must have an expiration date")
-            if v <= datetime.utcnow():
+            if v <= datetime.utcnow(): 
                 raise ValueError("Expiration date must be in the future")
             return v
 
@@ -68,7 +68,7 @@ class PostRead(PostBase):
     id: UUID
     user: Optional [UserPublic] = None
     username: Optional[str] = None
-    skills: list[str]
+    skills: List[str]
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -90,6 +90,12 @@ class PostRead(PostBase):
         if 'user' in values and values['user']:
             return values['user'].full_name
         return v
+
+    @validator('skills', pre=True)
+    def convert_skills(cls, v):
+        if v and hasattr(v[0], 'name'):
+            return [skill.name for skill in v]
+        return v or []
 
     class Config:
         from_attributes = True
