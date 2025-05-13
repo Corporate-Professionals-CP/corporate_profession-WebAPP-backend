@@ -5,7 +5,7 @@ from typing import List, Optional, TYPE_CHECKING, Any, Dict
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON
 from sqlalchemy.orm import Mapped, relationship
 from passlib.context import CryptContext
-
+from app.models.contact import Contact
 from app.models.follow import UserFollow
 from app.models.skill import Skill, UserSkill
 from app.schemas.enums import (
@@ -33,7 +33,7 @@ class UserBase(SQLModel):
     """Base fields shared across all user schemas"""
     full_name: str = Field(..., min_length=2, max_length=100)
     email: Optional[str] = Field(None, regex=r"^[^@]+@[^@]+\.[^@]+$")
-    username: Optional[str] = Field(None, min_length=3, max_length=50, regex=r"^[a-zA-Z0-9_]+$")
+
     phone: Optional[str] = Field(None, regex=r"^\+?[\d\s-]{10,15}$")
     bio: Optional[str] = Field(
         None, 
@@ -72,6 +72,20 @@ class User(UserBase, table=True):
     location: Optional[Location] = Field(default=None, nullable=True)
     education: Optional[EducationLevel] = Field(default=None, nullable=True)
 
+    contacts: Mapped[List["Contact"]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    work_experiences: Mapped[List["WorkExperience"]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    volunteering_experiences: Mapped[List["Volunteering"]] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
+    )
 
 
     skills: List["Skill"] = Relationship(

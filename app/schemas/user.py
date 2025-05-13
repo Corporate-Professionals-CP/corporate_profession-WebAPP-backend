@@ -15,7 +15,6 @@ class UserBase(BaseModel):
     full_name: Optional[str] = Field(..., min_length=2, max_length=100)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, pattern=r"^\+?[\d\s-]{10,15}$")
-    username: Optional[str] = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
     company: Optional[str] = Field(None, min_length=2, max_length=100)
     job_title: Optional[JobTitle] = Field(None, min_length=2, max_length=100)
     bio: Optional[str] = Field(
@@ -66,7 +65,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    username: Optional[str] = None
+
     company: Optional[str] = None
     job_title: Optional[JobTitle] = None
     bio: Optional[str] = None
