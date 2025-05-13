@@ -14,10 +14,19 @@ class CustomHTTPException(HTTPException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Handle validation errors and return a structured JSON response."""
     logger.error(f"Validation error on {request.url}: {exc.errors()}")
+
+    errors = exc.errors()
+    # Sanitize un-serializable objects in ctx
+    for error in errors:
+        ctx = error.get("ctx")
+        if ctx and isinstance(ctx.get("error"), Exception):
+            ctx["error"] = str(ctx["error"])
+
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "body": exc.body},
+        content={"detail": errors, "body": exc.body},
     )
+
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     """Custom HTTP exception handler for better error responses."""

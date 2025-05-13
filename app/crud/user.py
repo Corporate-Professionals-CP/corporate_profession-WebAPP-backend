@@ -83,12 +83,7 @@ async def create_user(session: AsyncSession, user_data: Union[UserCreate, dict])
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating user: {str(e)}"
-        )
+
 
 async def get_user_by_id(session: AsyncSession, user_id: UUID) -> Optional[User]:
     """Retrieve user by UUID with eager loading of relationships"""

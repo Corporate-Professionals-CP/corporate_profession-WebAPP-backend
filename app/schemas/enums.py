@@ -171,3 +171,36 @@ class UserRole(str, Enum):
     @classmethod
     def list(cls):
         return [item.value for item in cls]
+
+class ContactType(str, Enum):
+    """
+    contact selction setup
+    User Profile
+    """
+
+    EMAIL = "email"
+    LINKEDIN = "linkedin"
+    X = "x"
+    GITHUB = "github"
+    WEBSITE = "website"
+    CUSTOM = "custom"
+
+    @classmethod
+    def list(cls):
+        return [item.value for item in cls]
+
+class EmploymentType(str, Enum):
+    """
+    Work experience employment type
+    """
+    FULL_TIME = "full_time"
+    PART_TIME = "part_time"
+    CONTRACT = "contract"
+    FREELANCE = "freelance"
+    INTERNSHIP = "internship"
+    REMOTE = "remote"
+
+    @classmethod
+    def list(cls):
+        return [item.value for item in cls]
+

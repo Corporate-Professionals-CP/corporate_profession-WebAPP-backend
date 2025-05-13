@@ -75,7 +75,7 @@ async def login(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        user = await get_user_by_email_or_username(db, form_data.username)
+        user = await get_user_by_email(db, form_data.username)
         if not user:
             logger.warning(f"Login attempt for non-existent user: {form_data.email}")
             raise HTTPException(
@@ -127,7 +127,7 @@ async def login(
 
 @router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def signup(
-    request: Request,  # Moved before default arguments
+    request: Request, 
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db)
 ):

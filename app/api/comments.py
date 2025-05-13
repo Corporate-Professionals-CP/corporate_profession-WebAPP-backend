@@ -18,10 +18,10 @@ from app.schemas.post_comment import (
     PostCommentUpdate as CommentUpdate,
     PostCommentRead as CommentRead
 )
+from app.core.exceptions import CustomHTTPException
 
 
 router = APIRouter(prefix="/comments", tags=["Comments"])
-
 
 @router.post("/", response_model=CommentRead, status_code=status.HTTP_201_CREATED)
 async def add_comment(
@@ -29,12 +29,15 @@ async def add_comment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return await create_comment(
-        db=db,
-        user_id=current_user.id,
-        post_id=comment_in.post_id,
-        data=comment_in
-    )
+    try:
+        return await create_comment(
+            db=db,
+            user_id=current_user.id,
+            post_id=comment_in.post_id,
+            data=comment_in
+        )
+    except Exception as e:
+        raise CustomHTTPException(status_code=500, detail=f"Error creating comment: {str(e)}")
 
 
 @router.get("/post/{post_id}", response_model=List[CommentRead])
@@ -42,7 +45,10 @@ async def fetch_comments(
     post_id: str = Path(..., description="ID of the post to fetch comments for"),
     db: AsyncSession = Depends(get_db)
 ):
-    return await get_comments_for_post(db=db, post_id=post_id)
+    try:
+        return await get_comments_for_post(db=db, post_id=post_id)
+    except Exception as e:
+        raise CustomHTTPException(status_code=500, detail=f"Error fetching comments: {str(e)}")
 
 
 @router.put("/{comment_id}", response_model=CommentRead)

@@ -26,6 +26,8 @@ from app.crud.user import (
 from google.cloud.exceptions import GoogleCloudError
 from urllib.parse import urlparse
 from app.core.config import settings
+from fastapi.responses import FileResponse
+
 from app.utils.file_handling import save_uploaded_file, delete_user_file, bucket
 from fastapi.responses import FileResponse, RedirectResponse
 
