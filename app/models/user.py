@@ -27,6 +27,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 if TYPE_CHECKING:
     from app.models.post import Post
+    from app.models.bookmark import Bookmark
 
 
 def generate_uuid() -> str:
@@ -141,6 +142,26 @@ class User(UserBase, table=True):
         default_factory=dict,
         sa_column=Column(JSON),
         description="Mentorship preferences"
+    )
+
+    bookmarks: Mapped[List["Bookmark"]] = Relationship(
+        back_populates="user",
+        sa_relationship=relationship(
+            "Bookmark",
+            lazy="selectin",
+            cascade="all, delete-orphan"
+        )
+    )
+
+    bookmarked_posts: Mapped[List["Post"]] = Relationship(
+        back_populates="bookmarked_by_users",
+        link_model="Bookmark",
+        sa_relationship=relationship(
+            "Post",
+            secondary="bookmark",
+            lazy="selectin",
+            viewonly=True
+        )
     )
 
     age: Optional[int] = Field(None, ge=18, le=100)

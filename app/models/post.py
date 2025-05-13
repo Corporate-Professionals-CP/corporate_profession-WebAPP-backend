@@ -26,6 +26,7 @@ from app.schemas.enums import Industry, PostType, PostVisibility, ExperienceLeve
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.bookmark import Bookmark
 
 class PostStatus(str, Enum):
     DRAFT = "draft"
@@ -119,6 +120,26 @@ class Post(SQLModel, table=True):
     reactions: Mapped[List[PostReaction]] = Relationship(
         back_populates="post",
         sa_relationship_kwargs={"lazy": "selectin"}
+    )
+
+    bookmarked_by_users: Mapped[List["User"]] = Relationship(
+        back_populates="bookmarked_posts",
+        link_model="Bookmark",
+        sa_relationship=relationship(
+            "User",
+            secondary="bookmark",
+            lazy="selectin",
+            viewonly=True
+        )
+    )
+
+    bookmarks: Mapped[List["Bookmark"]] = Relationship(
+        back_populates="post",
+        sa_relationship=relationship(
+            "Bookmark",
+            lazy="selectin",
+            cascade="all, delete-orphan"
+        )
     )
 
 
