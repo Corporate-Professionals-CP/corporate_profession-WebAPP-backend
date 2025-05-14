@@ -13,6 +13,14 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.post_reaction import ReactionType
 from app.core.exceptions import CustomHTTPException 
+from app.crud.notification import create_notification
+from app.models.notification import Notification
+from app.schemas.enums import NotificationType
+from app.models.post import Post
+from app.crud.notification import create_notification
+from app.models.notification import Notification
+from app.schemas.enums import NotificationType
+
 
 router = APIRouter(prefix="/reactions", tags=["Post Reactions"])
 
@@ -24,9 +32,29 @@ async def react_to_post(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        return await add_or_update_reaction(db=db, user=current_user, reaction=reaction_in)
+        reaction = await add_or_update_reaction(db=db, user=current_user, reaction=reaction_in)
+
+        # Get the post
+        post = await db.get(Post, reaction_in.post_id)
+
+        # Notify the post owner (if not self)
+        if post and post.user_id != current_user.id:
+            await create_notification(
+                db,
+                Notification(
+                    recipient_id=post.user_id,
+                    actor_id=current_user.id,
+                    post_id=post.id,
+                    type=NotificationType.POST_REACTION,
+                    message=f"{current_user.full_name} reacted to your post."
+                )
+            )
+
+        return reaction
+
     except Exception as e:
         raise CustomHTTPException(status_code=500, detail=f"Error reacting to post: {str(e)}")
+
 
 
 @router.get("/post/{post_id}", response_model=List[PostReactionRead])

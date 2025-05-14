@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-
+from app.models.post import Post
 from app.db.database import get_db
 from app.models.post_comment import PostComment
 from app.core.security import get_current_user
@@ -18,6 +18,9 @@ from app.schemas.post_comment import (
     PostCommentUpdate as CommentUpdate,
     PostCommentRead as CommentRead
 )
+from app.crud.notification import create_notification
+from app.models.notification import Notification
+from app.schemas.enums import NotificationType
 from app.core.exceptions import CustomHTTPException
 
 
@@ -30,14 +33,35 @@ async def add_comment(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        return await create_comment(
+        # Create comment and store it
+        new_comment = await create_comment(
             db=db,
             user_id=current_user.id,
             post_id=comment_in.post_id,
             data=comment_in
         )
+
+        # Get the post to notify the owner
+        post = await db.get(Post, comment_in.post_id)
+
+        if post and post.user_id != current_user.id:
+            await create_notification(
+                db,
+                Notification(
+                    recipient_id=post.user_id,
+                    actor_id=current_user.id,
+                    post_id=post.id,
+                    comment_id=new_comment.id,
+                    type=NotificationType.POST_COMMENT,
+                    message=f"{current_user.full_name} commented on your post."
+                )
+            )
+
+        return new_comment
+
     except Exception as e:
         raise CustomHTTPException(status_code=500, detail=f"Error creating comment: {str(e)}")
+
 
 
 @router.get("/post/{post_id}", response_model=List[CommentRead])
