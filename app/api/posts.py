@@ -7,14 +7,14 @@ post endpoints implementation
 
 from uuid import UUID
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, or_, and_, delete
 from sqlalchemy.orm import selectinload
 from app.db.database import get_db
 from app.models.user import User
-from app.models.post import PostType
+from app.models.post import Post, PostType
 from app.schemas.post import PostCreate, PostRead, PostUpdate, PostSearch, PostSearchResponse
 from app.crud.post import (
     create_post,
@@ -24,10 +24,15 @@ from app.crud.post import (
     get_feed_posts,
     get_posts_by_user,
     search_posts,
-    enrich_multiple_posts
+    enrich_multiple_posts,
+    repost_post,
+    undo_repost_operation
 )
 from app.core.security import get_current_active_user, get_current_active_admin
 from app.core.config import settings
+from app.models.notification import Notification
+from app.crud.notification import create_notification
+from app.schemas.enums import NotificationType
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -202,6 +207,63 @@ async def update_existing_post(
             detail="You don't have permission to update this post"
         )
     return updated_post
+
+@router.post("/{post_id}/repost", response_model=PostRead)
+async def repost_content(
+    post_id: UUID,
+    quote: Optional[str] = Body(None, embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Create a repost or quote-repost"""
+    # First get the original post with its owner loaded
+    original_post_result = await db.execute(
+        select(Post)
+        .options(selectinload(Post.user))
+        .where(Post.id == str(post_id))
+    )
+    original_post = original_post_result.scalar_one_or_none()
+    
+    if not original_post:
+        raise HTTPException(status_code=404, detail="Original post not found")
+
+    # Create the repost
+    repost = await repost_post(db, post_id, current_user, quote_text=quote)
+
+    # Only send notification if not reposting own content
+    if str(original_post.user_id) != str(current_user.id):
+        await create_notification(
+            db,
+            Notification(
+                recipient_id=original_post.user_id,
+                actor_id=current_user.id,
+                type=NotificationType.POST_REPOST,
+                message=f"{current_user.full_name} reposted your post: '{original_post.title[:30]}...'",
+                reference_id=str(repost.id)  # Store repost ID for linking
+            )
+        )
+
+    # Get the user who created the repost (current_user)
+    user_result = await db.execute(select(User).where(User.id == repost.user_id))
+    repost_user = user_result.scalar_one()
+
+    # Use your existing enrich function
+    enriched_posts = await enrich_multiple_posts(db, [repost], [repost_user])
+    return enriched_posts[0]
+
+@router.delete("/reposts/{repost_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def undo_repost(
+    repost_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Endpoint to remove a repost"""
+    success = await undo_repost_operation(db, repost_id, current_user)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repost not found or you don't have permission"
+        )
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_existing_post(

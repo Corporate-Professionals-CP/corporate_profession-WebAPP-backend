@@ -78,6 +78,8 @@ class PostRead(PostBase):
     total_reactions: int = 0
     is_bookmarked: bool = False
     reactions_breakdown: ReactionBreakdown | None = None
+    is_repost: bool = False
+    original_post_id: Optional[UUID] = None
 
 
     @validator('skills', pre=True)

@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, desc, cast, JSON, Float, type_coerce
+from sqlalchemy import select, and_, or_, func, desc, cast, JSON, Float, type_coerce, delete
 
 from fastapi import HTTPException, status
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
@@ -24,6 +24,10 @@ from app.schemas.enums import Industry, PostType, JobTitle, PostVisibility
 from app.core.security import get_current_active_user
 from sqlalchemy.orm import selectinload, Mapped
 from collections import defaultdict
+from app.models.notification import Notification
+from app.crud.notification import create_notification
+from app.schemas.enums import NotificationType
+
 
 async def create_post(
     session: AsyncSession,
@@ -186,6 +190,121 @@ async def update_post(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update post: {str(e)}"
         )
+
+async def repost_post(
+    session: AsyncSession,
+    original_post_id: UUID,
+    current_user: User,
+    quote_text: Optional[str] = None
+) -> Post:
+    """Create a repost (or quote-repost) of an existing post"""
+    # Eager load the original post with its user
+    result = await session.execute(
+        select(Post)
+        .options(selectinload(Post.user))
+        .where(Post.id == str(original_post_id))
+    )
+    original_post = result.scalar_one_or_none()
+    
+    if not original_post:
+        raise HTTPException(status_code=404, detail="Original post not found")
+
+    # Get user identifier safely
+    user_identifier = (
+        original_post.user.full_name 
+        if hasattr(original_post.user, 'full_name') 
+        else getattr(original_post.user, 'email', 'a user').split('@')[0]
+    )
+
+    # Build content
+    # Replace the content building section with:
+    if quote_text:
+        # Clean and format the quote text
+        clean_quote = quote_text.strip()
+        clean_original = original_post.content.strip()
+        content = f"{clean_quote}\n\n—— Reposted from @{user_identifier} ——\n\n{clean_original}"
+        title = f"Repost: {original_post.title[:50]}..." 
+    else:
+        content = original_post.content
+        title = f"Repost: {original_post.title}"
+
+    # Create the repost
+    repost = Post(
+        title=title,
+        content=content,
+        post_type=original_post.post_type,
+        is_repost=True,
+        original_post_id=str(original_post.id),
+        user_id=str(current_user.id),
+        visibility=PostVisibility.PUBLIC,
+        tags=original_post.tags.copy() if original_post.tags else [],
+        skills=original_post.skills.copy() if original_post.skills else []
+    )
+
+    # Update engagement safely
+    if hasattr(original_post, 'engagement') and isinstance(original_post.engagement, dict):
+        original_post.engagement["share_count"] = original_post.engagement.get("share_count", 0) + 1
+    else:
+        original_post.engagement = {"share_count": 1}
+
+    session.add(repost)
+    await session.commit()
+    await session.refresh(repost)
+    return repost
+
+async def undo_repost_operation(
+    session: AsyncSession,
+    repost_id: UUID,
+    current_user: User
+) -> bool:
+    """CRUD operation to delete a repost"""
+    try:
+        # Get the repost with original post loaded
+        result = await session.execute(
+            select(Post)
+            .options(selectinload(Post.original_post))
+            .where(Post.id == str(repost_id))
+            .where(Post.user_id == str(current_user.id))
+            .where(Post.is_repost == True)
+        )
+        repost = result.scalar_one_or_none()
+        
+        if not repost:
+            return False
+
+        # Decrement share count on original
+        if repost.original_post:
+            if isinstance(repost.original_post.engagement, dict):
+                repost.original_post.engagement["share_count"] = max(
+                    0,
+                    repost.original_post.engagement.get("share_count", 1) - 1
+                )
+            else:
+                repost.original_post.engagement = {"share_count": 0}
+
+        # Delete associated notification if reference_id exists
+        if hasattr(Notification, 'reference_id'):
+            await session.execute(
+                delete(Notification).where(
+                    and_(
+                        Notification.reference_id == str(repost_id),
+                        Notification.type == NotificationType.POST_REPOST
+                    )
+                )
+            )
+
+        # Delete the repost
+        await session.delete(repost)
+        await session.commit()
+        return True
+
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to undo repost: {str(e)}"
+        )
+
 
 async def delete_post(
     session: AsyncSession,

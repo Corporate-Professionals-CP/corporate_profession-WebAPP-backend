@@ -9,6 +9,9 @@ from app.models.follow import UserFollow
 from app.schemas.follow import FollowingResponse, FollowerResponse
 from app.crud.user import get_user_by_id
 import anyio
+from app.models.notification import Notification
+from app.crud.notification import create_notification
+from app.schemas.enums import NotificationType
 
 router = APIRouter(prefix="/users", tags=["follow"])
 
@@ -56,6 +59,18 @@ async def follow_user(
         db.add(follow_entry)
         await db.commit()
         await db.refresh(follow_entry)
+
+        # Trigger Notification
+        await create_notification(
+            db,
+            Notification(
+                recipient_id=user_to_follow.id,
+                actor_id=current_user.id,
+                type=NotificationType.NEW_FOLLOWER,
+                message=f"{current_user.full_name} started following you."
+            )
+        )
+
         return {"message": f"Successfully followed user {user_id_str}"}
 
     except HTTPException as he:

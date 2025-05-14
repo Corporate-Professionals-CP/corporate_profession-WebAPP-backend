@@ -142,6 +142,21 @@ class Post(SQLModel, table=True):
         )
     )
 
+    is_repost: bool = Field(default=False)
+    original_post_id: Optional[str] = Field(
+        default=None,
+        foreign_key="post.id",
+        nullable=True
+    )
+    original_post: Optional["Post"] = Relationship(
+        sa_relationship=relationship(
+            "Post",
+            remote_side="Post.id",
+            primaryjoin="Post.original_post_id == Post.id",
+            lazy="selectin"
+        )
+    )
+
 
     @validator('expires_at')
     def validate_expiry(cls, v, values):

@@ -213,6 +213,7 @@ class NotificationType(str, Enum):
     BOOKMARK = "bookmark"
     JOB_APPLICATION = "job_application"
     NEW_MESSAGE = "new_message"
+    POST_REPOST = "post_repost"
 
     @classmethod
     def list(cls):

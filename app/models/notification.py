@@ -10,6 +10,7 @@ class Notification(SQLModel, table=True):
 
     recipient_id: str = Field(foreign_key="user.id")
     actor_id: Optional[str] = Field(default=None, foreign_key="user.id")
+    reference_id: Optional[str] = Field(default=None)
 
     type: NotificationType
     message: str
