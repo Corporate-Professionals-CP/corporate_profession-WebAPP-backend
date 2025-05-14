@@ -204,3 +204,16 @@ class EmploymentType(str, Enum):
     def list(cls):
         return [item.value for item in cls]
 
+
+class NotificationType(str, Enum):
+    NEW_FOLLOWER = "new_follower"
+    POST_COMMENT = "post_comment"
+    POST_REACTION = "post_reaction"
+    POST_TAG = "post_tag"
+    BOOKMARK = "bookmark"
+    JOB_APPLICATION = "job_application"
+    NEW_MESSAGE = "new_message"
+
+    @classmethod
+    def list(cls):
+        return [item.value for item in cls]

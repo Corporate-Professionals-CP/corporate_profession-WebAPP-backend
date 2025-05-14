@@ -76,6 +76,7 @@ class PostRead(PostBase):
     expires_at: Optional[datetime] = None
     total_comments: int = 0
     total_reactions: int = 0
+    is_bookmarked: bool = False
     reactions_breakdown: ReactionBreakdown | None = None
 
 

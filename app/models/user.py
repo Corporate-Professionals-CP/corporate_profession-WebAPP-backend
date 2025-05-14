@@ -12,6 +12,7 @@ from app.models.education import Education
 from app.models.volunteering import Volunteering
 from app.models.work_experience import WorkExperience
 from app.models.certification import Certification
+from app.models.notification import Notification
 from app.schemas.enums import (
     Industry,
     ExperienceLevel,
@@ -133,6 +134,10 @@ class User(UserBase, table=True):
         }
     )
 
+    notifications: list["Notification"] = Relationship(
+        back_populates="recipient",
+        sa_relationship_kwargs={"foreign_keys": "[Notification.recipient_id]"}
+    )
     work_life_balance_prefs: Optional[Dict[str, Any]] = Field(
         default_factory=dict,
         sa_column=Column(JSON),
