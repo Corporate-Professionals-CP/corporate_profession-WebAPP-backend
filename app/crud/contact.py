@@ -3,7 +3,7 @@ from sqlalchemy import select
 from app.models.contact import Contact
 from app.models.user import User
 from app.schemas.contact import ContactCreate, ContactUpdate
-from app.core.exceptions import CustomHTTPException  # Import your custom exception
+from app.core.exceptions import CustomHTTPException
 
 # Create a contact
 async def create_contact(session: AsyncSession, user: User, data: ContactCreate) -> Contact:

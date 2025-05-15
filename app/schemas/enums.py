@@ -214,6 +214,17 @@ class NotificationType(str, Enum):
     JOB_APPLICATION = "job_application"
     NEW_MESSAGE = "new_message"
     POST_REPOST = "post_repost"
+    CONNECTION_REQUEST = "connection_request"
+    CONNECTION_ACCEPTED = "connection_accepted"
+
+    @classmethod
+    def list(cls):
+        return [item.value for item in cls]
+
+class ConnectionStatus(str, Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
 
     @classmethod
     def list(cls):

@@ -29,6 +29,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 if TYPE_CHECKING:
     from app.models.post import Post
     from app.models.bookmark import Bookmark
+    from app.models.connection import Connection
 
 
 def generate_uuid() -> str:
@@ -167,6 +168,15 @@ class User(UserBase, table=True):
             lazy="selectin",
             viewonly=True
         )
+    )
+
+    connections_sent: List["Connection"] = Relationship(
+        back_populates="sender",
+        sa_relationship_kwargs={"foreign_keys": "[Connection.sender_id]"}
+    )
+    connections_received: List["Connection"] = Relationship(
+        back_populates="receiver",
+        sa_relationship_kwargs={"foreign_keys": "[Connection.receiver_id]"}
     )
 
     age: Optional[int] = Field(None, ge=18, le=100)

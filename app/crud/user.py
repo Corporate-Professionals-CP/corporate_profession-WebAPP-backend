@@ -440,7 +440,7 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
 
     required_fields = {
         'full_name': 15,
-        'job_title': 15,
+        'email': 15,
         'industry': 10,
         'years_of_experience': 10,
         'location': 10,
@@ -451,7 +451,7 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
     }
 
     optional_fields = {
-        'email': 5,
+        'job_title': 5,
         'phone': 5,
         'certifications': 5,
         'linkedin_profile': 5,
@@ -467,43 +467,35 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
 
     # Check required fields
     for field, weight in required_fields.items():
-        if getattr(user, field, None):
+        value = getattr(user, field, None)
+        if field == "skills":
+            is_completed = value is not None and isinstance(value, list) and len(value) > 0
+        else:
+            is_completed = bool(value)
+
+        if is_completed:
             completion['total_score'] += weight
-            completion['sections'][field] = {
-                'completed': True,
-                'weight': weight
-            }
+            completion['sections'][field] = {"completed": True, "weight": weight}
         else:
             completion['missing_fields'].append(field)
-            completion['sections'][field] = {
-                'completed': False,
-                'weight': weight
-            }
+            completion['sections'][field] = {"completed": False, "weight": weight}
 
-    # Check optional fields
+    # Optional fields
     for field, weight in optional_fields.items():
-        if getattr(user, field, None):
+        value = getattr(user, field, None)
+        is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
+        if is_completed:
             completion['total_score'] += weight
-            completion['sections'][field] = {
-                'completed': True,
-                'weight': weight
-            }
+            completion['sections'][field] = {"completed": True, "weight": weight}
 
-    # Special CV handling (required but in optional fields)
-    if not user.cv_url:
-        completion['missing_fields'].append('cv_url')
+    # Compute percentage
+    percentage = round((completion['total_score'] / completion['max_score']) * 100, 2)
 
-    # Calculate completion percentage
-    completion_percentage = (completion['total_score'] / completion['max_score']) * 100
-    print(f"Completion Percentage: {completion_percentage}") # debugging
-
-    # Return the UserProfileCompletion instance
     return UserProfileCompletion(
-        completion_percentage=completion_percentage,
+        completion_percentage=percentage,
         missing_fields=completion['missing_fields'],
         sections=completion['sections']
     )
-
 
 async def get_recently_active_users(
     session: AsyncSession,

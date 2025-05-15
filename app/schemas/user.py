@@ -85,6 +85,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class UserPublic(UserBase):
+    full_name: Optional[str]
     id: str
     industry: Optional[Industry]
     years_of_experience: Optional[ExperienceLevel]

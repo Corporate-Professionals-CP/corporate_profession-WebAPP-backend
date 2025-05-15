@@ -21,7 +21,6 @@ from app.models.post_comment import PostComment
 from app.models.post_reaction import PostReaction
 from app.models.follow import UserFollow
 
-# Import enums
 from app.schemas.enums import Industry, PostType, PostVisibility, ExperienceLevel, JobTitle
 
 if TYPE_CHECKING:
