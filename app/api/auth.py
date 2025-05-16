@@ -41,8 +41,15 @@ from app.core.error_codes import (
     NOT_FOUND_ERROR,
     UNAUTHORIZED_ERROR,
     INVALID_CREDENTIALS,
-    ACCOUNT_DEACTIVATION
+    ACCOUNT_DEACTIVATION,
+    GOOGLE_EMAIL_NOT_VERIFIED,
+    MISSING_GOOGLE_EMAIL,
+    EMAIL_ALREADY_REGISTERED,
+    INVALID_GOOGLE_TOKEN,
+    GOOGLE_AUTH_FAILED
 )
+
+
 from app.core.exceptions import CustomHTTPException
 
 logger = logging.getLogger(__name__)
@@ -257,25 +264,28 @@ async def signup_with_google(
 
         # Check email verification
         if not id_info.get('email_verified', False):
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Google email not verified"
+                detail="Google email not verified",
+                error_code="GOOGLE_EMAIL_NOT_VERIFIED"
             )
 
         # Extract email safely
         email = id_info.get("email")
         if not email:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Google response missing email"
+                detail="Google response missing email",
+                error_code="MISSING_GOOGLE_EMAIL"
             )
 
         # Check existing user
         existing_user = await get_user_by_email(db, email)
         if existing_user:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
+                error_code="EMAIL_ALREADY_REGISTERED"
             )
 
         # Create user data
@@ -284,7 +294,7 @@ async def signup_with_google(
             "full_name": id_info.get("name", ""),
             "is_verified": True,
             "hashed_password": get_password_hash(str(uuid.uuid4())),
-            "recruiter_tag": user_in.recruiter_tag  # Direct access is safe
+            "recruiter_tag": user_in.recruiter_tag
         }
         user = await create_user(db, user_data)
 
@@ -300,16 +310,19 @@ async def signup_with_google(
         }
 
     except ValueError as e:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid Google token: {str(e)}"
+            detail=f"Invalid Google token: {str(e)}",
+            error_code="INVALID_GOOGLE_TOKEN"
         )
     except Exception as e:
         logger.error(f"Google auth error: {str(e)}", exc_info=True)
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Google authentication failed: {str(e)}"
+            detail=f"Google authentication failed: {str(e)}",
+            error_code="GOOGLE_AUTH_FAILED"
         )
+
 
 @router.post("/verify-email", response_model=UserRead)
 async def verify_email(
