@@ -1,6 +1,7 @@
 from datetime import datetime
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from app.schemas.user import UserRead
 
 class Token(BaseModel):
     """Complete token response"""
@@ -32,3 +33,9 @@ class UserCreateWithGoogle(BaseModel):
     """User creation schema for Google OAuth"""
     google_token: str
     recruiter_tag: bool = False
+
+class SignupResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    user_id: str
+    user: UserRead

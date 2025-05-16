@@ -60,8 +60,11 @@ app.add_middleware(
 )
 
 # Exception Handlers
+app.add_exception_handler(CustomHTTPException, http_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+
 
 # API Routers
 api_router = APIRouter(prefix="/api")

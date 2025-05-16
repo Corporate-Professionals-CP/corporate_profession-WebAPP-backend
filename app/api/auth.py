@@ -18,7 +18,8 @@ from google.auth.transport import requests as google_requests
 from app.db.database import get_db
 from app.schemas.auth import (
     Token, EmailVerify, PasswordReset, 
-    GoogleToken, UserCreateWithGoogle
+    GoogleToken, UserCreateWithGoogle,
+    SignupResponse
 )
 from app.schemas.user import UserRead, UserCreate, UserUpdate
 from app.core.security import (
@@ -84,69 +85,58 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
-    try:
-        user = await get_user_by_email(db, form_data.username)
-        if not user:
-            logger.warning(f"Login attempt for non-existent user: {form_data.username}")
-            raise CustomHTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email not found",
-                error_code=EMAIL_NOT_FOUND,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        if not verify_password(form_data.password, user.hashed_password):
-            logger.warning(f"Failed login attempt for user: {user.email}")
-            raise CustomHTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password",
-                error_code=INVALID_CREDENTIALS,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-
-        if not user.is_active:
-            raise CustomHTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account deactivated. Please contact support",
-                error_code=ACCOUNT_DEACTIVATION,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        if not user.is_verified:
-            raise CustomHTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account not verified. Please check your email",
-                error_code=ACCOUNT_NOT_VERIFIED,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        scopes = ["user"]
-        if user.recruiter_tag:
-            scopes.append("recruiter")
-        if user.is_admin:
-            scopes.append("admin")
-
-        return {
-            "access_token": create_access_token(user.id, scopes),
-            "refresh_token": create_refresh_token(user.id),
-            "token_type": "bearer",
-            "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        }
-    except Exception as e:
-        import traceback
-        print("\n AUTH ERROR on /token:")
-        print(f"Exception: {str(e)}")
-        traceback.print_exc()
+    user = await get_user_by_email(db, form_data.username)
+    if not user:
+        logger.warning(f"Login attempt for non-existent user: {form_data.username}")
         raise CustomHTTPException(
-            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error while trying to login, check your details",
-            error_code=NOT_FOUND_ERROR,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email not found",
+            error_code=EMAIL_NOT_FOUND,
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-@router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+    if not verify_password(form_data.password, user.hashed_password):
+        logger.warning(f"Failed login attempt for user: {user.email}")
+        raise CustomHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            error_code=INVALID_CREDENTIALS,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise CustomHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account deactivated. Please contact support",
+            error_code=ACCOUNT_DEACTIVATION,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_verified:
+        raise CustomHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account not verified. Please check your email",
+            error_code=ACCOUNT_NOT_VERIFIED,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    scopes = ["user"]
+    if user.recruiter_tag:
+        scopes.append("recruiter")
+    if user.is_admin:
+        scopes.append("admin")
+
+    return {
+        "access_token": create_access_token(user.id, scopes),
+        "refresh_token": create_refresh_token(user.id),
+        "token_type": "bearer",
+        "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    }
+
+
+@router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
-    request: Request, 
+    request: Request,
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db)
 ):
@@ -168,28 +158,34 @@ async def signup(
     # Create new user
     user = await create_user(db, user_in)
 
-    # Generate verification token
+    # Generate tokens
+    access_token = create_access_token(user_id=str(user.id))
+    refresh_token = create_refresh_token(user_id=str(user.id))
     verification_token = create_access_token(
         user_id=str(user.id),
         expires_delta=timedelta(minutes=30),
         additional_claims={"type": "verify"}
     )
 
-    # For testing, include token in response
+    # For testing, include verification token in response
     if settings.ENVIRONMENT == "testing":
-        user_dict = user.dict()
-        user_dict["verification_token"] = verification_token
         logger.info(f"Verification token for {user.email}: {verification_token}")
-        return user_dict
+        verification_data = {"verification_token": verification_token}
+    else:
+        verification_data = {}
+        await send_verification_email(
+            email=user.email,
+            name=user.full_name,
+            token=verification_token
+        )
 
-    # In production, send email but don't return token
-    await send_verification_email(
-        email=user.email,
-        name=user.full_name,
-        token=verification_token
-    )
-
-    return user
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user_id": str(user.id),
+        "user": user,
+        **verification_data
+    }
 
 @router.post("/google", response_model=Token)
 async def google_oauth(
@@ -238,7 +234,7 @@ async def google_oauth(
             detail=f"Google authentication failed: {str(e)}"
         )
 
-@router.post("/signup/google", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post("/signup/google", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 async def signup_with_google(
     user_in: UserCreateWithGoogle,
     db: AsyncSession = Depends(get_db)
@@ -251,7 +247,7 @@ async def signup_with_google(
             google_requests.Request(),
             settings.GOOGLE_CLIENT_ID
         )
-        
+
         # Log the full Google response for debugging
         logger.info(f"Google ID Info: {id_info}")
 
@@ -291,7 +287,17 @@ async def signup_with_google(
             "recruiter_tag": user_in.recruiter_tag  # Direct access is safe
         }
         user = await create_user(db, user_data)
-        return user
+
+        # Generate tokens (same as regular signup)
+        access_token = create_access_token(user_id=str(user.id))
+        refresh_token = create_refresh_token(user_id=str(user.id))
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "user_id": str(user.id),
+            "user": user
+        }
 
     except ValueError as e:
         raise HTTPException(
