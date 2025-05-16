@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from fastapi.responses import Response
@@ -13,11 +13,11 @@ from app.crud.connection import (
     respond_to_connection,
     get_my_requests,
     get_my_connections,
-    remove_connection,
     remove_connection as crud_remove_connection
 )
 from app.crud.notification import create_notification
 from app.utils.connection_helpers import format_connection
+from app.core.exceptions import CustomHTTPException
 
 router = APIRouter(prefix="/network", tags=["Connections"])
 
@@ -28,22 +28,27 @@ async def connect(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    connection = await send_connection_request(
-        db, str(current_user.id), str(payload.receiver_id)
-    )
-
-    if connection:
-        await create_notification(
-            db,
-            Notification(
-                recipient_id=str(payload.receiver_id),
-                actor_id=str(current_user.id),
-                type=NotificationType.CONNECTION_REQUEST,
-                message=f"{current_user.full_name} sent you a connection request.",
-            ),
+    try:
+        connection = await send_connection_request(
+            db, str(current_user.id), str(payload.receiver_id)
         )
 
-    return format_connection(connection)
+        if connection:
+            await create_notification(
+                db,
+                Notification(
+                    recipient_id=str(payload.receiver_id),
+                    actor_id=str(current_user.id),
+                    type=NotificationType.CONNECTION_REQUEST,
+                    message=f"{current_user.full_name} sent you a connection request.",
+                ),
+            )
+
+        return format_connection(connection)
+    except CustomHTTPException:
+        raise
+    except Exception:
+        raise CustomHTTPException(500, "Failed to send connection request")
 
 
 @router.put("/{connection_id}/respond", response_model=ConnectionRead)
@@ -53,23 +58,25 @@ async def respond_to_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    conn = await respond_to_connection(db, str(connection_id), payload.status)
+    try:
+        conn = await respond_to_connection(db, str(connection_id), payload.status)
 
-    if not conn:
-        raise HTTPException(status_code=404, detail="Connection not found")
+        if payload.status == "accepted":
+            await create_notification(
+                db,
+                Notification(
+                    recipient_id=str(conn.sender_id),
+                    actor_id=str(current_user.id),
+                    type=NotificationType.CONNECTION_ACCEPTED,
+                    message=f"{current_user.full_name} accepted your connection request.",
+                ),
+            )
 
-    if payload.status == "accepted":
-        await create_notification(
-            db,
-            Notification(
-                recipient_id=str(conn.sender_id),
-                actor_id=str(current_user.id),
-                type=NotificationType.CONNECTION_ACCEPTED,
-                message=f"{current_user.full_name} accepted your connection request.",
-            ),
-        )
-
-    return format_connection(conn)
+        return format_connection(conn)
+    except CustomHTTPException:
+        raise
+    except Exception:
+        raise CustomHTTPException(500, "Failed to respond to connection request")
 
 
 @router.get("/pending", response_model=list[ConnectionRead])
@@ -77,8 +84,11 @@ async def pending_requests(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    requests = await get_my_requests(db, str(current_user.id))
-    return [format_connection(conn) for conn in requests]
+    try:
+        requests = await get_my_requests(db, str(current_user.id))
+        return [format_connection(conn) for conn in requests]
+    except Exception:
+        raise CustomHTTPException(500, "Failed to fetch pending connection requests")
 
 
 @router.get("/my-connections", response_model=list[ConnectionRead])
@@ -86,8 +96,11 @@ async def my_connections(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    connections = await get_my_connections(db, str(current_user.id))
-    return [format_connection(conn) for conn in connections]
+    try:
+        connections = await get_my_connections(db, str(current_user.id))
+        return [format_connection(conn) for conn in connections]
+    except Exception:
+        raise CustomHTTPException(500, "Failed to fetch your connections")
 
 
 @router.delete("/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -96,10 +109,16 @@ async def remove_connection(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    success = await crud_remove_connection(db, str(connection_id), str(current_user.id))
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found or you don't have permission"
-        )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    try:
+        success = await crud_remove_connection(db, str(connection_id), str(current_user.id))
+        if not success:
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found or you don't have permission"
+            )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except CustomHTTPException:
+        raise
+    except Exception:
+        raise CustomHTTPException(500, "Failed to remove connection")
+

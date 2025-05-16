@@ -29,10 +29,20 @@ from app.core.security import (
     verify_token,
     get_current_user
 )
+from starlette.status import *
 from app.core.config import settings
 from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id, get_user_by_email_or_username
 from app.core.email import send_verification_email, send_password_reset_email
 from pydantic import parse_obj_as
+from app.core.error_codes import (
+    EMAIL_NOT_FOUND,
+    NOT_AUTHORIZED,
+    NOT_FOUND_ERROR,
+    UNAUTHORIZED_ERROR,
+    INVALID_CREDENTIALS,
+    ACCOUNT_DEACTIVATION
+)
+from app.core.exceptions import CustomHTTPException
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -77,32 +87,37 @@ async def login(
     try:
         user = await get_user_by_email(db, form_data.username)
         if not user:
-            logger.warning(f"Login attempt for non-existent user: {form_data.email}")
-            raise HTTPException(
+            logger.warning(f"Login attempt for non-existent user: {form_data.username}")
+            raise CustomHTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found! sign up",
+                detail="Email not found",
+                error_code=EMAIL_NOT_FOUND,
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
         if not verify_password(form_data.password, user.hashed_password):
             logger.warning(f"Failed login attempt for user: {user.email}")
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                detail="Invalid email or password",
+                error_code=INVALID_CREDENTIALS,
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
 
         if not user.is_active:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account deactivated. Please contact support.",
+                detail="Account deactivated. Please contact support",
+                error_code=ACCOUNT_DEACTIVATION,
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
         if not user.is_verified:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account not verified. Please check your email.",
+                detail="Account not verified. Please check your email",
+                error_code=ACCOUNT_NOT_VERIFIED,
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -123,7 +138,11 @@ async def login(
         print("\n AUTH ERROR on /token:")
         print(f"Exception: {str(e)}")
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise CustomHTTPException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error while trying to login, check your details",
+            error_code=NOT_FOUND_ERROR,
+        )
 
 @router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def signup(

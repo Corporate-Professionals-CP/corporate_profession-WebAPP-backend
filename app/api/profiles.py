@@ -30,7 +30,20 @@ from fastapi.responses import FileResponse
 
 from app.utils.file_handling import save_uploaded_file, delete_user_file, bucket
 from fastapi.responses import FileResponse, RedirectResponse
-
+from app.core.exceptions import CustomHTTPException
+from app.core.error_codes import (
+    USER_NOT_FOUND,
+    NOT_AUTHORIZED,
+    CV_UPLOAD_FAILED,
+    CV_NOT_FOUND,
+    INVALID_CV_URL,
+    GCS_UNAVAILABLE,
+    CV_DELETE_FAILED,
+    PROFILE_UPDATE_FAILED,
+    PROFILE_COMPLETION_FORBIDDEN,
+    REQUIRED_FIELD_MISSING,
+    ADMIN_PRIVILEGE_REQUIRED
+)
 logger = logging.getLogger(__name__)
 
 
@@ -63,9 +76,10 @@ async def get_profile(
     
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="User not found",
+            error_code=USER_NOT_FOUND,
         )
 
     # Return full profile if owner/admin or profile not hidden
@@ -91,9 +105,10 @@ async def get_profile_completion_status(
     """
     # Only allow users to check their own completion unless admin
     if str(current_user.id) != str(user_id) and not current_user.is_admin:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Can only check your own profile completion"
+            detail="Can only check your own profile completion",
+            error_code=PROFILE_COMPLETION_FORBIDDEN,
         )
 
     completion = await get_profile_completion(db, user_id)
@@ -115,16 +130,18 @@ async def update_profile(
     """
     # Verify ownership or admin rights
     if str(current_user.id) != str(user_id) and not current_user.is_admin:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update this profile"
+            detail="Not authorized to update this profile",
+            error_code=NOT_AUTHORIZED,
         )
 
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="User not found",
+            error_code=USER_NOT_FOUND,
         )
 
 
@@ -132,14 +149,16 @@ async def update_profile(
     # Special handling for admin-only fields
     if not current_user.is_admin:
         if user_update.is_admin is not None:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin privileges required"
+                detail="Admin privileges required",
+                error_code=ADMIN_PRIVILEGE_REQUIRED,
             )
         if user_update.is_active is not None:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot modify account status"
+                detail="Cannot modify account status",
+                error_code=ADMIN_PRIVILEGE_REQUIRED,
             )
     # Validate required fields
     # Conditionally require profile fields for regular professionals only
@@ -148,17 +167,19 @@ async def update_profile(
         required_fields = ["full_name", "email", "job_title", "industry", "location", "years_of_experience"]
         for field in required_fields:
             if getattr(user_update, field) is None:
-                raise HTTPException(
+                raise CustomHTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"{field} is required for professional users"
+                    detail=f"{field} is required for professional users",
+                    error_code=REQUIRED_FIELD_MISSING,
                 )
 
 
     updated_user = await update_user(db, user_id, user_update, current_user)
     if not updated_user:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update profile"
+            detail="Failed to update profile",
+            error_code=PROFILE_UPDATE_FAILED,
         )
     updated_user.update_profile_completion()
 
@@ -182,9 +203,10 @@ async def upload_cv(
     """
     # Verify ownership or admin rights
     if str(current_user.id) != str(user_id) and not current_user.is_admin:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update this profile"
+            detail="Not authorized to update this profile",
+            error_code=NOT_AUTHORIZED,
         )
 
     try:
@@ -194,9 +216,10 @@ async def upload_cv(
         # Update user record with the new CV URL
         user = await get_user_by_id(db, user_id)
         if not user:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                detail="User not found",
+                error_code=USER_NOT_FOUND,
             )
 
         user.cv_url = cv_url
@@ -208,9 +231,10 @@ async def upload_cv(
     except HTTPException as he:
         raise he
     except Exception as e:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload CV to GCS: {str(e)}"
+            detail=f"Failed to upload CV to GCS: {str(e)}",
+            error_code=CV_UPLOAD_FAILED,
         )
 
 @router.delete("/{user_id}/cv", status_code=status.HTTP_204_NO_CONTENT)
@@ -226,31 +250,35 @@ async def delete_cv(
     """
     # Verify ownership or admin rights
     if str(current_user.id) != str(user_id) and not current_user.is_admin:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update this profile"
+            detail="Not authorized to update this profile",
+            error_code=NOT_AUTHORIZED,
         )
 
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="User not found",
+            error_code=USER_NOT_FOUND,
         )
 
     if not user.cv_url:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No CV found to delete"
+            detail="No CV found to delete",
+            error_code=CV_NOT_FOUND,
         )
 
     try:
         # Delete from GCS
         success = await delete_user_file(user.cv_url)
         if not success:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete CV from storage"
+                detail="Failed to delete CV from storage",
+                error_code=CV_DELETE_FAILED,
             )
 
         # Clear CV URL from user record
@@ -260,9 +288,10 @@ async def delete_cv(
     except HTTPException as he:
         raise he
     except Exception as e:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete CV: {str(e)}"
+            detail=f"Failed to delete CV: {str(e)}",
+            error_code=CV_DELETE_FAILED,
         )
 
 
@@ -273,7 +302,11 @@ async def download_cv(
 ):
     user = await get_user_by_id(db, user_id)
     if not user or not user.cv_url:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "CV not found")
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="CV not found",
+            error_code=CV_NOT_FOUND,
+        )
 
     try:
         # Validate URL structure
@@ -296,7 +329,7 @@ async def download_cv(
         blob = bucket.blob(blob_path)
 
         if not blob.exists():
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "CV file not found in storage")
+            raise CustomHTTPException(status.HTTP_404_NOT_FOUND, "CV file not found in storage")
 
         # Generate fresh signed URL with 5 minute expiration
         new_url = blob.generate_signed_url(
@@ -309,20 +342,23 @@ async def download_cv(
 
     except ValueError as e:
         logger.error(f"URL validation error: {str(e)}")
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid CV URL format"
+            detail="Invalid CV URL format",
+            error_code=INVALID_CV_URL,
         )
     except GoogleCloudError as e:
         logger.error(f"GCS API error: {str(e)}")
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Storage service unavailable"
+            detail="Storage service unavailable",
+            error_code=GCS_UNAVAILABLE,
         )
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate download URL"
+            detail="Failed to generate download URL",
+            error_code=GCS_UNAVAILABLE,
         )
 

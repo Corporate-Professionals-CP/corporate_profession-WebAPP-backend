@@ -12,7 +12,7 @@ from fastapi.exception_handlers import http_exception_handler as default_http_ex
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
-
+from app.core.exceptions import CustomHTTPException
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -37,6 +37,17 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"detail": "An unexpected error occurred. Please try again later."}
+    )
+
+@app.exception_handler(CustomHTTPException)
+async def custom_http_exception_handler(request: Request, exc: CustomHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "error_code": exc.error_code
+        },
+        headers=exc.headers or {},
     )
 
 # CORS Middleware
