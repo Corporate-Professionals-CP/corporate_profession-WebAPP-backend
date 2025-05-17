@@ -13,11 +13,21 @@ from app.models.post import Post, PostType, PostStatus
 from app.schemas.post import PostRead
 from app.core.security import get_current_user
 from app.crud.post import get_feed_posts, enrich_multiple_posts
+from app.crud.connection import get_my_connections
 from app.models.user import User
+from app.models.connection import Connection, ConnectionStatus
 from app.models.follow import UserFollow
 from app.utils.feed_cookies import (
     track_seen_posts,
     get_seen_posts_from_request
+)
+
+from app.core.error_codes import (
+    FEED_ERROR,
+    NETWORK_FEED_ERROR,
+    INVALID_CURSOR_FORMAT,
+    UNAUTHORIZED_ACCESS,
+    INVALID_REQUEST_PARAMS
 )
 
 router = APIRouter(prefix="/feed", tags=["feed"])
@@ -41,14 +51,15 @@ async def get_personalized_feed(
     """
     Personalized feed curated by:
     - Followed users
-    - Shared topics (tags)
+    - Followers
+    - Connections
+    - Shared topics
     - Industry relevance
     Includes:
     - Engagement scoring
     - Fresh posts
     - Enriched data (comments, reactions)
     """
-
     try:
         cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
         exclude_ids = get_seen_posts_from_request(request)
@@ -60,13 +71,45 @@ async def get_personalized_feed(
                 cursor_time_str, cursor_id = cursor.split(",")
                 cursor_time = datetime.fromisoformat(cursor_time_str)
             except ValueError:
-                raise HTTPException(400, "Invalid cursor format")
+                raise CustomHTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid cursor format: {str(e)}. Expected 'timestamp,post_id'",
+                    error_code=INVALID_CURSOR_FORMAT
+                )
 
-        # Get followed users
+
+        # 1. Get followed user IDs
         followed_q = await db.execute(
             select(UserFollow.followed_id).where(UserFollow.follower_id == current_user.id)
         )
-        followed_ids = [str(row[0]) for row in followed_q.all()]
+        followed_ids = {str(row[0]) for row in followed_q.all()}
+
+        # 2. Get follower user IDs
+        followers_q = await db.execute(
+            select(UserFollow.follower_id).where(UserFollow.followed_id == current_user.id)
+        )
+        follower_ids = {str(row[0]) for row in followers_q.all()}
+
+        # 3. Get connected user IDs
+        conn_q = await db.execute(
+            select(Connection).where(
+                Connection.status == ConnectionStatus.ACCEPTED,
+                or_(
+                    Connection.sender_id == current_user.id,
+                    Connection.receiver_id == current_user.id
+                )
+            )
+        )
+        connections = conn_q.scalars().all()
+        connection_ids = set()
+        for conn in connections:
+            if conn.sender_id != current_user.id:
+                connection_ids.add(str(conn.sender_id))
+            if conn.receiver_id != current_user.id:
+                connection_ids.add(str(conn.receiver_id))
+
+        # Combine all related user IDs
+        related_user_ids = followed_ids | follower_ids | connection_ids
 
         # Base query
         stmt = (
@@ -79,11 +122,14 @@ async def get_personalized_feed(
             )
         )
 
-        # Filters
+        # Build OR conditions for user-related and content-related relevance
         conditions = []
 
         if post_type:
             conditions.append(Post.post_type == post_type)
+
+        if related_user_ids:
+            conditions.append(Post.user_id.in_(related_user_ids))
 
         if current_user.topics:
             conditions.append(Post.tags.overlap(current_user.topics))
@@ -91,11 +137,9 @@ async def get_personalized_feed(
         if current_user.industry:
             conditions.append(Post.industry == current_user.industry)
 
-        # Include followed users’ posts
-        if followed_ids:
-            conditions.append(Post.user_id.in_(followed_ids))
-
-        stmt = stmt.where(or_(*conditions))
+        # Only apply OR if we have at least one filtering condition
+        if conditions:
+            stmt = stmt.where(or_(*conditions))
 
         if cutoff_date:
             stmt = stmt.where(Post.created_at >= cutoff_date)
@@ -134,12 +178,14 @@ async def get_personalized_feed(
             next_cursor=next_cursor
         )
 
+    except CustomHTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(500, detail=f"Feed error: {str(e)}")
-
-
-
-
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error in personalized feed",
+            error_code=FEED_ERROR
+        )
 
 @router.get("/network", response_model=FeedResponse)
 async def get_network_feed(
@@ -153,7 +199,7 @@ async def get_network_feed(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get posts only from followed users or based on shared interests (topics)
+    Get posts only from followed users and accepted network connections.
     """
     try:
         cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
@@ -165,16 +211,45 @@ async def get_network_feed(
                 cursor_time_str, cursor_id = cursor.split(",")
                 cursor_time = datetime.fromisoformat(cursor_time_str)
             except ValueError:
-                raise HTTPException(400, "Invalid cursor format")
+                raise CustomHTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid cursor format: {str(e)}. Expected 'timestamp,post_id'",
+                    error_code=INVALID_CURSOR_FORMAT
+                )
 
+        user_id = str(current_user.id)
+
+        # 1. Get followed user IDs
+        follow_stmt = select(UserFollow.followed_id).where(UserFollow.follower_id == user_id)
+        follow_result = await db.execute(follow_stmt)
+        followed_user_ids = set(follow_result.scalars().all())
+
+        # 2. Get connected user IDs (accepted connections)
+        connections = await get_my_connections(db, user_id)
+        connected_user_ids = set()
+        for conn in connections:
+            if conn.sender_id != user_id:
+                connected_user_ids.add(conn.sender_id)
+            elif conn.receiver_id != user_id:
+                connected_user_ids.add(conn.receiver_id)
+
+        # Combine both sets of user IDs
+        allowed_user_ids = followed_user_ids.union(connected_user_ids)
+
+        # If no followed or connected users, return empty feed
+        if not allowed_user_ids:
+            return FeedResponse(main_posts=[], fresh_posts=[], next_cursor=None)
+
+        # Base query: posts by allowed users only (excluding self)
         stmt = (
             select(Post, User)
-            .join(User)
+            .join(User, Post.user_id == User.id)
             .where(
                 Post.deleted == False,
                 Post.status == PostStatus.PUBLISHED,
                 Post.is_active == True,
-                Post.user_id != current_user.id
+                Post.user_id.in_(allowed_user_ids),
+                Post.user_id != user_id
             )
         )
 
@@ -188,12 +263,14 @@ async def get_network_feed(
             stmt = stmt.where(
                 or_(
                     Post.created_at < cursor_time,
-                    and_(Post.created_at == cursor_time, Post.id < cursor_id)
+                    and_(
+                        Post.created_at == cursor_time,
+                        Post.id < cursor_id
+                    )
                 )
             )
 
         stmt = stmt.order_by(Post.created_at.desc(), Post.id.desc()).limit(limit + 1)
-
         result = await db.execute(stmt)
         rows = result.all()
 
@@ -216,4 +293,8 @@ async def get_network_feed(
         )
 
     except Exception as e:
-        raise HTTPException(500, detail=f"Network feed error: {str(e)}")
+            raise CustomHTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error retrieving network feed posts",
+                error_code=NETWORK_FEED_ERROR
+            )

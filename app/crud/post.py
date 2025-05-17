@@ -19,6 +19,7 @@ from app.models.post_reaction import ReactionType, PostReaction
 from app.models.user import User
 from app.models.skill import Skill
 from app.models.follow import UserFollow
+from app.models.connection import Connection
 from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead, ReactionBreakdown, PostSearchResponse
 from app.schemas.enums import Industry, PostType, JobTitle, PostVisibility
 from app.core.security import get_current_active_user
@@ -682,6 +683,7 @@ async def search_posts(
 async def search_jobs_by_criteria(
     session: AsyncSession,
     current_user: Optional[User] = None,
+    query: Optional[str] = None,
     skill: Optional[str] = None,
     location: Optional[str] = None,
     experience: Optional[str] = None,
@@ -691,20 +693,28 @@ async def search_jobs_by_criteria(
 ) -> List[Post]:
     """
     Search for job postings based on multiple criteria: skill, location, experience, and job title.
+    If `current_user` follows somebody, only their posts are shown; otherwise we return posts
+    from everyone.
     """
+    # Base: only job‐type posts
+    stmt = select(Post).where(Post.post_type == PostType.JOB_POSTING)
 
+    # If user is passed in, restrict to the ones they follow—but only if the list is non-empty
     if current_user:
         followed_users = await session.execute(
             select(UserFollow.followed_id)
             .where(UserFollow.follower_id == str(current_user.id))
         )
         followed_ids = [str(u[0]) for u in followed_users.all()]
+        if followed_ids:
+            stmt = stmt.where(Post.user_id.in_(followed_ids))
 
-        
-    stmt = select(Post).where(Post.post_type == PostType.JOB_POSTING)
-    stmt = stmt.where(
+    # 2) Keyword search on title/content
+    if query:
+        stmt = stmt.where(
             or_(
-                Post.user_id.in_(followed_ids),
+                Post.title.ilike(f"%{query}%"),
+                Post.content.ilike(f"%{query}%")
             )
         )
 
@@ -724,10 +734,13 @@ async def search_jobs_by_criteria(
     if job_title:
         stmt = stmt.where(Post.title.ilike(f"%{job_title}%"))
 
+    # Pagination
     stmt = stmt.offset(offset).limit(limit)
 
     result = await session.execute(stmt)
     return result.scalars().all()
+
+
 
 async def get_multi(
     session: AsyncSession,
