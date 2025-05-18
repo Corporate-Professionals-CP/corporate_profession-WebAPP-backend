@@ -183,6 +183,7 @@ class User(UserBase, table=True):
     sex: Gender = Field(default=Gender.PREFER_NOT_TO_SAY)
     linkedin_profile: Optional[str] = Field(None, regex=r"^https?://(www\.)?linkedin\.com/.*$")
     cv_url: Optional[str] = None
+    status: Optional[str] = Field(default=None, max_length=255)
     cv_uploaded_at: Optional[datetime] = None
     visibility: ProfileVisibility = Field(default=ProfileVisibility.PUBLIC)
     hide_profile: bool = Field(default=False)

@@ -23,6 +23,7 @@ class UserBase(BaseModel):
         max_length=500,
         example="Marketing professional passionate about brand growth"
     )
+    status: Optional[str] = None
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
     location: Optional[Location] = None
@@ -76,6 +77,7 @@ class UserUpdate(BaseModel):
     education: Optional[EducationLevel] = None
     age: Optional[int] = None
     sex: Optional[Gender] = None
+    status: Optional[str] = None
     certifications: Optional[str] = None
     linkedin_profile: Optional[HttpUrl] = None
     visibility: Optional[ProfileVisibility] = None
@@ -88,6 +90,7 @@ class UserPublic(UserBase):
     full_name: Optional[str]
     id: str
     age: Optional[int]
+    status: Optional[str]
     industry: Optional[Industry]
     years_of_experience: Optional[ExperienceLevel]
     location: Optional[Location]
