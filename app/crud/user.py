@@ -27,7 +27,7 @@ from app.schemas.user import (
     UserDirectoryItem,
     UserProfileCompletion
 )
-
+from pydantic import HttpUrl
 from app.schemas.enums import (
     Location,
     Industry,
@@ -120,39 +120,43 @@ async def get_user_by_email_or_username(session: AsyncSession, identifier: str) 
 async def update_user(
     session: AsyncSession,
     user_id: UUID,
-    user_update: Union[UserUpdate, dict],  # Accept either type
+    user_update: Union[UserUpdate, dict],
     current_user: Optional[User] = None
 ) -> User:
     db_user = await get_user_by_id(session, user_id)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Handle both Pydantic model and dictionary input
+    # Convert to dict
     if isinstance(user_update, dict):
         update_data = user_update
     else:
-        # Authorization checks only for UserUpdate (not for system updates)
-        if current_user is not None:
+        update_data = user_update.dict(exclude_unset=True)
+
+        # Auth check
+        if current_user:
             if db_user.id != current_user.id and not current_user.is_admin:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Cannot update other users"
                 )
 
-            # Admin-only fields protection
+            # Only block sensitive fields *if* they are included in the update
+            restricted_fields = {"is_active", "is_admin", "is_verified"}
             if not current_user.is_admin:
-                for field in ["is_active", "is_admin", "is_verified"]:
-                    if getattr(user_update, field) is not None:
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail=f"Cannot update {field} without admin privileges"
-                        )
-
-        update_data = user_update.dict(exclude_unset=True)
+                unauthorized_fields = restricted_fields & update_data.keys()
+                if unauthorized_fields:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"You are not allowed to update: {', '.join(unauthorized_fields)}"
+                    )
 
     # Apply updates
     for field, value in update_data.items():
-        setattr(db_user, field, value)
+        if isinstance(value, HttpUrl):
+            setattr(db_user, field, str(value))
+        else:
+            setattr(db_user, field, value)
 
     try:
         session.add(db_user)
@@ -165,6 +169,8 @@ async def update_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Database error: {str(e)}"
         )
+
+
 
 async def get_user_for_update(
     session: AsyncSession, 
@@ -436,7 +442,7 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
     """
     user = await get_user_by_id(session, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User  not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     required_fields = {
         'full_name': 15,
@@ -480,22 +486,33 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
             completion['missing_fields'].append(field)
             completion['sections'][field] = {"completed": False, "weight": weight}
 
-    # Optional fields
+    # Optional fields - add only if total_score doesn't exceed max_score
     for field, weight in optional_fields.items():
         value = getattr(user, field, None)
         is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
         if is_completed:
-            completion['total_score'] += weight
-            completion['sections'][field] = {"completed": True, "weight": weight}
+            # Only add if it won't push total_score beyond max_score
+            if completion['total_score'] + weight <= completion['max_score']:
+                completion['total_score'] += weight
+                completion['sections'][field] = {"completed": True, "weight": weight}
+            else:
+                # Mark optional field incomplete if adding it would exceed max_score
+                completion['sections'][field] = {"completed": False, "weight": weight}
 
     # Compute percentage
     percentage = round((completion['total_score'] / completion['max_score']) * 100, 2)
+
+    # Cap percentage at 100 to satisfy Pydantic validation
+    if percentage > 100:
+        percentage = 100.0
 
     return UserProfileCompletion(
         completion_percentage=percentage,
         missing_fields=completion['missing_fields'],
         sections=completion['sections']
     )
+
+
 
 async def get_recently_active_users(
     session: AsyncSession,

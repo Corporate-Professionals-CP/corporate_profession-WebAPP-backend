@@ -25,10 +25,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         if ctx and isinstance(ctx.get("error"), Exception):
             ctx["error"] = str(ctx["error"])
 
-    print(f"CustomHTTPException caught: {exc.detail}")
     return JSONResponse(
         status_code=422,
-        content={"detail": errors, "body": exc.body},
+        content={
+            "detail": errors,
+            "message": "Validation failed. Please check your request data.",
+        },
     )
 
 async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:

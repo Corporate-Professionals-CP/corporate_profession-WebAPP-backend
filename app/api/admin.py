@@ -26,7 +26,16 @@ from app.crud import (
     post as crud_post,
     skill as crud_skill
 )
-
+from app.core.exceptions import CustomHTTPException
+from app.core.error_codes import (
+    ADMIN_USER_NOT_FOUND,
+    ADMIN_POST_NOT_FOUND,
+    ADMIN_UPDATE_ERROR,
+    ADMIN_DELETE_ERROR,
+    ADMIN_BULK_ACTION_ERROR,
+    ADMIN_METRICS_ERROR,
+    ADMIN_DROPDOWN_ERROR
+)
 router = APIRouter(
     prefix="/admin",
     tags=["admin"],
@@ -71,30 +80,57 @@ async def admin_list_users(
     db: AsyncSession = Depends(get_db)
 ):
     """List users with advanced filters """
-    users = await crud_user.get_filtered_users(
-        db,
-        is_active=filters.is_active,
-        is_verified=filters.is_verified,
-        recruiter_tag=filters.recruiter_tag,
-        industry=filters.industry,
-        experience_level=filters.experience_level,
-        skip=skip,
-        limit=limit
-    )
-    return users
+    try:
+        users = await crud_user.get_filtered_users(
+            db,
+            is_active=filters.is_active,
+            is_verified=filters.is_verified,
+            recruiter_tag=filters.recruiter_tag,
+            industry=filters.industry,
+            experience_level=filters.experience_level,
+            skip=skip,
+            limit=limit
+        )
+        if not users:
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No users found matching criteria",
+                error_code=ADMIN_USER_NOT_FOUND
+            )
+        return users
+    except Exception as e:
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No users found matching criteria",
+            error_code=ADMIN_USER_NOT_FOUND
+        )
 
 @router.post("/users/bulk-actions", response_model=Dict[str, int])
 async def bulk_user_actions(
     request: BulkActionRequest,
     db: AsyncSession = Depends(get_db)
 ):
-
-    """Bulk user actions (activate/deactivate/verify)"""
-    return await crud_user.bulk_user_actions(
-        db,
-        user_ids=request.user_ids,
-        action=request.action
+    """Bulk user actions with custom error handling"""
+    try:
+        result = await crud_user.bulk_user_actions(
+            db,
+            user_ids=request.user_ids,
+            action=request.action
         )
+        if not result:
+            raise CustomHTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No users were updated",
+                error_code=ADMIN_BULK_ACTION_ERROR
+            )
+        return result
+    except Exception as e:
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=" bulk actions failed, no user were updated",
+            error_code=ADMIN_BULK_ACTION_ERROR
+        )
+
 
 @router.post("/users/{user_id}/deactivate", response_model=UserRead)
 async def deactivate_user(
@@ -102,20 +138,28 @@ async def deactivate_user(
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(get_current_active_admin)
 ):
+    """Deactivate user with custom error handling"""
     try:
-        return await crud_user.update_user_status(
+        user = await crud_user.update_user_status(
             session=db,
             user_id=user_id,
             is_active=False,
             current_user=current_admin
         )
-    except HTTPException as he:
-        raise
+        if not user:
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+                error_code=ADMIN_USER_NOT_FOUND
+            )
+        return user
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Deactivation failed: {str(e)}"
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Error deactivating user, user does not exist",
+            error_code=ADMIN_UPDATE_ERROR
         )
+
 
 @router.post("/users/{user_id}/activate", response_model=UserRead)
 async def activate_user(
@@ -123,20 +167,28 @@ async def activate_user(
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(get_current_active_admin)
 ):
+    """Activate user with custom error handling"""
     try:
-        return await crud_user.update_user_status(
+        user = await crud_user.update_user_status(
             session=db,
             user_id=user_id,
             is_active=True,
             current_user=current_admin
         )
-    except HTTPException as he:
-        raise
+        if not user:
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+                error_code=ADMIN_USER_NOT_FOUND
+            )
+        return user
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Activation failed: {str(e)}"
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Error activating user, user does not exist",
+            error_code=ADMIN_UPDATE_ERROR
         )
+
 
 @router.put("/users/{user_id}", response_model=UserRead)
 async def admin_update_user(

@@ -87,6 +87,7 @@ class UserUpdate(BaseModel):
 class UserPublic(UserBase):
     full_name: Optional[str]
     id: str
+    age: Optional[int]
     industry: Optional[Industry]
     years_of_experience: Optional[ExperienceLevel]
     location: Optional[Location]
