@@ -151,7 +151,7 @@ async def update_profile(
         if user_update.is_admin is not None:
             raise CustomHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin privileges required",
+                detail="Admin privileges required to perform some of this updating operation",
                 error_code=ADMIN_PRIVILEGE_REQUIRED,
             )
         if user_update.is_active is not None:

@@ -34,6 +34,19 @@ from app.schemas.enums import (
     ExperienceLevel,
     JobTitle,
 )
+from app.core.exceptions import CustomHTTPException
+from app.core.error_codes import (
+    USER_ALREADY_EXISTS,
+    USER_NOT_FOUND,
+    USER_UPDATE_ERROR,
+    USER_DELETE_ERROR,
+    USER_SEARCH_ERROR,
+    USER_BULK_ACTION_ERROR,
+    USER_PROFILE_ERROR,
+    FILE_UPLOAD_ERROR,
+    DATABASE_INTEGRITY_ERROR,
+    INVALID_USER_DATA
+)
 
 async def create_user(session: AsyncSession, user_data: Union[UserCreate, dict]) -> User:
     """
@@ -45,15 +58,20 @@ async def create_user(session: AsyncSession, user_data: Union[UserCreate, dict])
         if isinstance(user_data, dict):
             email = user_data.get("email")
             if not email:
-                raise ValueError("Email is required for user creation")
+                raise CustomHTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email is required for user creation",
+                    error_code=INVALID_USER_DATA
+                )
             existing_user = await get_user_by_email(session, email)
         else:
             existing_user = await get_user_by_email(session, user_data.email)
 
         if existing_user:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
+                error_code=USER_ALREADY_EXISTS
             )
 
         # Handle different input types
@@ -79,34 +97,48 @@ async def create_user(session: AsyncSession, user_data: Union[UserCreate, dict])
         )
     except ValueError as e:
         await session.rollback()
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=str(e),
+            error_code=INVALID_USER_DATA
         )
 
 
 async def get_user_by_id(session: AsyncSession, user_id: UUID) -> Optional[User]:
-    """Retrieve user by UUID with eager loading of relationships"""
-    result = await session.execute(
-        select(User)
-        .options(selectinload(User.skills))
-        .where(User.id == str(user_id))
-    )
-    return result.scalars().first()
-
+    """Retrieve user by UUID with error handling"""
+    try:
+        result = await session.execute(
+            select(User)
+            .options(selectinload(User.skills))
+            .where(User.id == str(user_id))
+        )
+        return result.scalars().first()
+    except Exception as e:
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving user",
+            error_code=USER_NOT_FOUND
+        )
 
 async def get(session: AsyncSession, user_id: UUID) -> Optional[User]:
     """Get user by ID (alias for get_user_by_id)"""
     return await get_user_by_id(session, user_id)
 
 async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]:
-    """Case-insensitive email lookup"""
-    result = await session.execute(
-        select(User)
-        .options(selectinload(User.skills))
-        .where(User.email.ilike(email))
-    )
-    return result.scalars().first()
+    """Case-insensitive email lookup with error handling"""
+    try:
+        result = await session.execute(
+            select(User)
+            .options(selectinload(User.skills))
+            .where(User.email.ilike(email))
+        )
+        return result.scalars().first()
+    except Exception as e:
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving user by email",
+            error_code=USER_NOT_FOUND
+        )
 
 async def get_user_by_email_or_username(session: AsyncSession, identifier: str) -> Optional[User]:
     """Retrieve user by email or username"""
@@ -125,7 +157,11 @@ async def update_user(
 ) -> User:
     db_user = await get_user_by_id(session, user_id)
     if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+            error_code=USER_NOT_FOUND
+        )
 
     # Convert to dict
     if isinstance(user_update, dict):
@@ -136,9 +172,10 @@ async def update_user(
         # Auth check
         if current_user:
             if db_user.id != current_user.id and not current_user.is_admin:
-                raise HTTPException(
+                raise CustomHTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Cannot update other users"
+                    detail="Cannot update other users",
+                    error_code=USER_UPDATE_ERROR
                 )
 
             # Only block sensitive fields *if* they are included in the update
@@ -146,9 +183,10 @@ async def update_user(
             if not current_user.is_admin:
                 unauthorized_fields = restricted_fields & update_data.keys()
                 if unauthorized_fields:
-                    raise HTTPException(
+                    raise CustomHTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"You are not allowed to update: {', '.join(unauthorized_fields)}"
+                        detail=f"You are not allowed to update: {', '.join(unauthorized_fields)}",
+                        error_code=USER_UPDATE_ERROR
                     )
 
     # Apply updates
@@ -165,9 +203,10 @@ async def update_user(
         return db_user
     except IntegrityError as e:
         await session.rollback()
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Database error: {str(e)}"
+            detail=f"Database error: {str(e)}",
+            error_code=DATABASE_INTEGRITY_ERROR
         )
 
 
@@ -202,10 +241,18 @@ async def update_user_status(
         user = result.scalars().first()
 
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+                error_code=USER_NOT_FOUND
+            )
 
         if not current_user.is_admin:
-            raise HTTPException(status_code=403, detail="Admin privileges required")
+            raise CustomHTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin privileges required",
+                error_code=USER_UPDATE_ERROR
+            )
 
         # Perform update
         user.is_active = is_active
@@ -214,16 +261,18 @@ async def update_user_status(
 
     except SQLAlchemyError as e:
         await session.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database error: {str(e)}"
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}",
+            error_code=DATABASE_INTEGRITY_ERROR
         )
-    except HTTPException:
+    except CustomHTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error: {str(e)}"
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error: {str(e)}",
+            error_code=USER_UPDATE_ERROR
         )
 
 async def search_users(
@@ -398,7 +447,11 @@ async def upload_user_cv(
     """
     user = await get_user_by_id(session, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+            error_code=USER_NOT_FOUND
+        )
 
     try:
         # Delete existing CV if present
@@ -413,11 +466,15 @@ async def upload_user_cv(
         await session.commit()
         await session.refresh(user)
         return user
+    except CustomHTTPException:
+        await session.rollback()
+        raise
     except Exception as e:
         await session.rollback()
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File upload failed: {str(e)}"
+            detail=f"File upload failed: {str(e)}",
+            error_code=FILE_UPLOAD_ERROR
         )
 
 async def delete_user_cv(session: AsyncSession, user_id: UUID) -> User:
@@ -442,7 +499,11 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
     """
     user = await get_user_by_id(session, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+            error_code=USER_NOT_FOUND
+        )
 
     required_fields = {
         'full_name': 15,
