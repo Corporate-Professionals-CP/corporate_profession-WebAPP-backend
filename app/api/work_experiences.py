@@ -16,7 +16,7 @@ from app.crud.work_experience import (
     update_work_experience,
     delete_work_experience
 )
-from app.core.exceptions import CustomHTTPException  # Import your custom exception
+from app.core.exceptions import CustomHTTPException
 
 router = APIRouter(prefix="/work-experiences", tags=["work_experiences"])
 

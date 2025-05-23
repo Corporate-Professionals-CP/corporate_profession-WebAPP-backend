@@ -6,7 +6,7 @@ Complete user CRUD operations covering all requirements:
 - Bulk operations
 - GDPR compliance
 """
-
+import os
 from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
 import sqlalchemy
@@ -45,8 +45,10 @@ from app.core.error_codes import (
     USER_PROFILE_ERROR,
     FILE_UPLOAD_ERROR,
     DATABASE_INTEGRITY_ERROR,
-    INVALID_USER_DATA
+    INVALID_USER_DATA,
+    CV_UPLOAD_FAILED
 )
+from app.core.config import settings
 
 async def create_user(session: AsyncSession, user_data: Union[UserCreate, dict]) -> User:
     """
@@ -283,7 +285,7 @@ async def search_users(
     experience: Optional[ExperienceLevel] = None,
     location: Optional[Location] = None,
     skills: Optional[str] = None,
-    job_title: Optional[JobTitle] = None,
+    job_title: Optional[str] = None,
     recruiter_only: bool = False,
     hide_hidden: bool = True,
     offset: int = 0,
@@ -484,14 +486,109 @@ async def delete_user_cv(session: AsyncSession, user_id: UUID) -> User:
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.cv_url:
-        await delete_user_file(user.cv_url)
-        user.cv_url = None
-        user.cv_uploaded_at = None
+        try:
+            success = await delete_user_file(user.cv_url)
+            if not success:
+                raise CustomHTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to delete CV from storage"
+                )
+            
+            user.cv_url = None
+            user.cv_uploaded_at = None
+            await session.commit()
+            await session.refresh(user)
+        except Exception as e:
+            await session.rollback()
+            raise CustomHTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete CV: {str(e)}"
+            )
+    return user
 
-        session.add(user)
+async def upload_user_profile_image(
+    session: AsyncSession,
+    user_id: UUID,
+    file: UploadFile
+) -> User:
+    """
+    Handle profile image upload with cloud storage
+    - Deletes old image if exists
+    - Uploads new image to configured profile path
+    - Updates user record with new URL
+    """
+    user = await get_user_by_id(session, user_id)
+    if not user:
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+            error_code=USER_NOT_FOUND
+        )
+
+    try:
+        # Delete existing profile image if present
+        if user.profile_image_url:
+            await delete_user_file(user.profile_image_url)
+
+        # Save new profile image using the configured base path
+        user.profile_image_url = await save_uploaded_file(
+            file=file,
+            user_id=str(user_id),
+            file_type="profile"  # This uses GCS_PROFILE_IMAGE_BASE_PATH from config
+        )
+        user.profile_image_uploaded_at = datetime.utcnow()
+
         await session.commit()
         await session.refresh(user)
-    return user
+        return user
+        
+    except HTTPException as e:
+        await session.rollback()
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise CustomHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Profile image upload failed: {str(e)}",
+            error_code=FILE_UPLOAD_ERROR
+        )
+
+async def delete_user_profile_image(session: AsyncSession, user_id: UUID) -> None:
+    user = await get_user_by_id(session, user_id)
+    if not user:
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+            error_code=USER_NOT_FOUND
+        )
+
+    if not user.profile_image_url:
+        return  # No image to delete
+
+    try:
+        success = await delete_user_file(user.profile_image_url)
+        if not success:
+            raise CustomHTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete image from storage",
+                error_code=FILE_DELETE_ERROR
+            )
+        # On success, clear the DB field
+        user.profile_image_url = None
+        user.updated_at = datetime.utcnow()
+        session.add(user)
+        await session.commit()
+    except CustomHTTPException:
+        await session.rollback()
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting profile image: {str(e)}",
+            error_code=FILE_DELETE_ERROR
+        )
+
 
 async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserProfileCompletion:
     """

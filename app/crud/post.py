@@ -6,7 +6,7 @@ Complete Post CRUD operations with:
 - Better error handling
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -684,7 +684,7 @@ async def search_jobs_by_criteria(
     session: AsyncSession,
     current_user: Optional[User] = None,
     query: Optional[str] = None,
-    skill: Optional[str] = None,
+    skill: Optional[Union[str, List[str]]] = None,
     location: Optional[str] = None,
     experience: Optional[str] = None,
     job_title: Optional[str] = None,
@@ -693,13 +693,15 @@ async def search_jobs_by_criteria(
 ) -> List[Post]:
     """
     Search for job postings based on multiple criteria: skill, location, experience, and job title.
-    If `current_user` follows somebody, only their posts are shown; otherwise we return posts
-    from everyone.
+    If `current_user` follows someone, only their posts are shown; otherwise, posts from all users.
     """
-    # Base: only job‐type posts
-    stmt = select(Post).where(Post.post_type == PostType.JOB_POSTING)
+    stmt = (
+        select(Post)
+        .where(Post.post_type == PostType.JOB_POSTING)
+        .options(selectinload(Post.skills))
+    )
 
-    # If user is passed in, restrict to the ones they follow—but only if the list is non-empty
+    # Filter to followed users if applicable
     if current_user:
         followed_users = await session.execute(
             select(UserFollow.followed_id)
@@ -709,7 +711,7 @@ async def search_jobs_by_criteria(
         if followed_ids:
             stmt = stmt.where(Post.user_id.in_(followed_ids))
 
-    # 2) Keyword search on title/content
+    # Keyword query on title/content
     if query:
         stmt = stmt.where(
             or_(
@@ -718,29 +720,28 @@ async def search_jobs_by_criteria(
             )
         )
 
-    # Filter by skill if provided
+    # Skill filtering
     if skill:
-        stmt = stmt.where(Post.skills.any(name=skill))
+        skill_list = [skill] if isinstance(skill, str) else skill
+        stmt = stmt.where(or_(*[Post.skills.any(name=s) for s in skill_list]))
 
-    # Filter by location if provided
+    # Location filtering
     if location:
         stmt = stmt.where(Post.location.ilike(f"%{location}%"))
 
-    # Filter by experience if provided
+    # Experience filtering
     if experience:
         stmt = stmt.where(Post.experience_level == experience)
 
-    # Filter by job title if provided
+    # Job title filtering
     if job_title:
         stmt = stmt.where(Post.title.ilike(f"%{job_title}%"))
 
-    # Pagination
-    stmt = stmt.offset(offset).limit(limit)
+    # Sorting & pagination
+    stmt = stmt.order_by(Post.created_at.desc()).offset(offset).limit(limit)
 
     result = await session.execute(stmt)
     return result.scalars().all()
-
-
 
 async def get_multi(
     session: AsyncSession,

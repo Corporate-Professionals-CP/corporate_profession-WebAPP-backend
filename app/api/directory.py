@@ -36,7 +36,7 @@ async def search_directory(
     Search professionals and job postings with advanced filtering.
     """
     try:
-        # 1) Active user check
+        # Active user check
         if not current_user.is_active:
             raise CustomHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -44,7 +44,7 @@ async def search_directory(
                 error_code=UNAUTHORIZED_ACCESS
             )
 
-        # 2) At least one filter required
+        # At least one filter required
         if not any([
             params.q,
             params.industry,
@@ -59,7 +59,7 @@ async def search_directory(
                 error_code=INVALID_SEARCH_PARAMS
             )
 
-        # 3) Build location string
+        # Build location string
         location_str: Optional[str] = None
         if params.location:
             parts = []
@@ -70,37 +70,37 @@ async def search_directory(
             if parts:
                 location_str = ", ".join(parts)
 
-        # 4) Pull enum-fields as plain strings
+        # Pull enum-fields as plain strings
         industry_str: Optional[str]  = params.industry
         experience_str: Optional[str] = params.experience
         job_title_str: Optional[str]  = params.job_title
 
-        # 5) Wrap single skill into list if your CRUD expects list
-        skills_arg = [params.skill] if params.skill else None
+        # Wrap single skill into list if your CRUD expects list
+        skill_input = params.skill
 
-        # 6) Run user search
+        # Run user search
         users = await search_users(
             db,
             query=params.q,
             industry=industry_str,
             experience=experience_str,
             location=location_str,
-            skills=skills_arg,
+            skills=skill_input,
             job_title=job_title_str,
             recruiter_only=params.recruiter_only,
             hide_hidden=True
         )
 
-        # 7) Run job-post search across ALL users (no follow filter)
+        # Run job-post search across ALL users (no follow filter)
         jobs = await search_jobs_by_criteria(
             db,
-            skill=skills_arg,
+            skill=skill_input,
             location=location_str,
             experience=experience_str,
             job_title=job_title_str
         )
 
-        # 8) Combine + return
+        # Combine + return
         return transform_results(users, jobs)
 
     except CustomHTTPException:

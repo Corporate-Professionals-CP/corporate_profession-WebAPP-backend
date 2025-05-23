@@ -60,10 +60,10 @@ class Post(SQLModel, table=True):
             nullable=False
         )
     )
-    job_title: Optional[JobTitle] = Field(
+    job_title: Optional[str] = Field(
         default=None,
         index=True,
-        sa_type=String(50)
+        max_length=50
     )
     industry: Optional[Industry] = Field(default=None, index=True)
     experience_level: Optional[ExperienceLevel] = Field(default=None)
@@ -196,8 +196,8 @@ class PostCreate(SQLModel):
     content: str
     post_type: PostType
     industry: Optional[Industry] = None
-    tags: List[str] = []
-    job_title: Optional[JobTitle] = None
+    tags: Optional[List[str]] = []
+    job_title: Optional[str] = None
     expires_at: Optional[datetime] = None
     media_url: Optional[str] = None
     media_type: Optional[str] = Field(default="image")  # or "video"

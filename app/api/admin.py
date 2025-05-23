@@ -19,6 +19,7 @@ from app.models.user import User
 from app.models.post import Post
 from app.schemas.user import UserRead, UserUpdate, UserDirectoryItem
 from app.schemas.post import PostRead, PostUpdate
+from app.schemas.skill import SkillRead
 from app.core.security import get_current_active_admin
 from app.schemas.enums import Industry, ExperienceLevel, JobTitle, PostVisibility
 from app.crud import (
@@ -44,9 +45,9 @@ router = APIRouter(
 
 
 class DropdownUpdate(BaseModel):
-    job_titles: Optional[List[JobTitle]] = None
+    job_titles: Optional[List[str]] = None
     industries: Optional[List[Industry]] = None
-    skills: Optional[List[str]] = None
+    skills: Optional[List[SkillRead]] = None
     experience_levels: Optional[List[ExperienceLevel]] = None
 
 class AdminMetrics(BaseModel):
@@ -279,10 +280,9 @@ async def get_dropdown_options(db: AsyncSession = Depends(get_db)):
     return {
         "industries": Industry.list(),  # Enum-based
         "experience_levels": ExperienceLevel.list(), # Enum-based
-        "job_titles": JobTitle.list(),  # Enum-based
+        "job_titles": [],  # str
         "skills": await crud_skill.get_multi(db)  # From model
     }
-
 
 @router.get("/metrics", response_model=AdminMetrics)
 async def get_admin_metrics(db: AsyncSession = Depends(get_db)):

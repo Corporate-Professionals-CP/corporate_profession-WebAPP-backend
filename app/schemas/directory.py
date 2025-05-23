@@ -15,7 +15,7 @@ class DirectorySearchParams(BaseModel):
     location: Optional[LocationFilter] = None
     skill: Optional[str] = None
     recruiter_only: Optional[bool] = False
-    job_title: Optional[JobTitle] = None
+    job_title: Optional[str] = None
     
     class Config:
         use_enum_values = True

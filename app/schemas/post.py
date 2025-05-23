@@ -21,7 +21,7 @@ class PostBase(BaseModel):
     industry: Optional[Industry] = None
     visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
     experience_level: Optional[ExperienceLevel] = None
-    job_title: Optional[JobTitle] = None
+    job_title: Optional[str] = None
     tags: Optional [List[str]] = Field(default_factory=list)
     skills: Optional [List[str]] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
@@ -49,7 +49,7 @@ class PostUpdate(BaseModel):
     post_type: Optional[PostType] = None
     industry: Optional[Industry] = None
     experience_level: Optional[ExperienceLevel] = None
-    job_title: Optional[JobTitle] = None
+    job_title: Optional[str] = None
     skills: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     visibility: Optional[PostVisibility] = None
@@ -111,7 +111,7 @@ class PostSearch(BaseModel):
     query: Optional[str] = Field(None, description="Search by keywords in title/content")
     industry: Optional[Industry] = None
     post_type: Optional[PostType] = None
-    job_title: Optional[JobTitle] = None
+    job_title: Optional[str] = None
     experience_level: Optional[ExperienceLevel] = None
     created_after: Optional[datetime] = Field(
         None, 

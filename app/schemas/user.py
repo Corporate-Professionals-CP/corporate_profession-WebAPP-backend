@@ -17,7 +17,7 @@ class UserBase(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(None, pattern=r"^\+?[\d\s-]{10,15}$")
     company: Optional[str] = Field(None, min_length=2, max_length=100)
-    job_title: Optional[JobTitle] = Field(None, min_length=2, max_length=100)
+    job_title: Optional[str] = Field(None, min_length=2, max_length=100)
     bio: Optional[str] = Field(
         None,
         max_length=500,
@@ -69,7 +69,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
 
     company: Optional[str] = None
-    job_title: Optional[JobTitle] = None
+    job_title: Optional[str] = None
     bio: Optional[str] = None
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
@@ -115,7 +115,7 @@ class UserRead(UserPublic):
 class UserDirectoryItem(BaseModel):
     id: str
     full_name: Optional[str]
-    job_title: Optional[JobTitle]
+    job_title: Optional[str]
     company: Optional[str]
     industry: Optional[Industry]
     skills: List[str] = Field(default_factory=list)

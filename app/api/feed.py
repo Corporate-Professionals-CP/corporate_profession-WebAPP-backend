@@ -78,19 +78,19 @@ async def get_personalized_feed(
                 )
 
 
-        # 1. Get followed user IDs
+        # Get followed user IDs
         followed_q = await db.execute(
             select(UserFollow.followed_id).where(UserFollow.follower_id == current_user.id)
         )
         followed_ids = {str(row[0]) for row in followed_q.all()}
 
-        # 2. Get follower user IDs
+        # Get follower user IDs
         followers_q = await db.execute(
             select(UserFollow.follower_id).where(UserFollow.followed_id == current_user.id)
         )
         follower_ids = {str(row[0]) for row in followers_q.all()}
 
-        # 3. Get connected user IDs
+        # Get connected user IDs
         conn_q = await db.execute(
             select(Connection).where(
                 Connection.status == ConnectionStatus.ACCEPTED,
@@ -219,12 +219,12 @@ async def get_network_feed(
 
         user_id = str(current_user.id)
 
-        # 1. Get followed user IDs
+        # Get followed user IDs
         follow_stmt = select(UserFollow.followed_id).where(UserFollow.follower_id == user_id)
         follow_result = await db.execute(follow_stmt)
         followed_user_ids = set(follow_result.scalars().all())
 
-        # 2. Get connected user IDs (accepted connections)
+        # Get connected user IDs (accepted connections)
         connections = await get_my_connections(db, user_id)
         connected_user_ids = set()
         for conn in connections:

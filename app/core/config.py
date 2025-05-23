@@ -45,17 +45,20 @@ class Settings(BaseSettings):
     #Google Cloud Storage Settings
     GCS_PROJECT_ID: str
     GCS_BUCKET_NAME: str
-    GCS_BASE_PATH: str = "cvs"
+    GCS_BASE_PATH: str = "users/{user_id}/cvs"
     GCS_CREDENTIALS_JSON_B64: Optional[str] = None
     MAX_CV_SIZE: int = 5 * 1024 * 1024  # 5MB
 
+    GCS_PROFILE_IMAGE_BASE_PATH: str = "users/{user_id}/profile_images"
+    MAX_PROFILE_IMAGE_SIZE: int = 5 * 1024 * 1024
+
     # Email Service
-    MAILJET_API_KEY: str
-    MAILJET_SECRET_KEY: str
-    VERIFICATION_EMAIL_TEMPLATE_ID: Optional[int] = None
-    PASSWORD_RESET_TEMPLATE_ID: Optional[int] = None
+
+    RESEND_API_KEY: str
     EMAILS_FROM_EMAIL: str
     EMAILS_FROM_NAME: str = "Corporate Professionals"
+    ENVIRONMENT: str = "development"  # or 'testing', 'production'
+
 
     # Redis (for rate limiting)
     # REDIS_URL: Optional[RedisDsn] = None

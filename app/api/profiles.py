@@ -21,7 +21,10 @@ from app.crud.user import (
     get_user_by_id,
     update_user,
     upload_user_cv,
-    get_profile_completion
+    delete_user_cv,
+    get_profile_completion,
+    upload_user_profile_image,
+    delete_user_profile_image
 )
 from google.cloud.exceptions import GoogleCloudError
 from urllib.parse import urlparse
@@ -187,6 +190,7 @@ async def update_profile(
 
     return updated_user
 
+
 @router.post("/{user_id}/cv", response_model=UserRead)
 async def upload_cv(
     user_id: UUID,
@@ -243,12 +247,6 @@ async def delete_cv(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """
-    Remove user CV from Google Cloud Storage
-    - Deletes file from GCS bucket
-    - Clears CV URL from user record
-    """
-    # Verify ownership or admin rights
     if str(current_user.id) != str(user_id) and not current_user.is_admin:
         raise CustomHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -256,44 +254,16 @@ async def delete_cv(
             error_code=NOT_AUTHORIZED,
         )
 
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-            error_code=USER_NOT_FOUND,
-        )
-
-    if not user.cv_url:
-        raise CustomHTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No CV found to delete",
-            error_code=CV_NOT_FOUND,
-        )
-
     try:
-        # Delete from GCS
-        success = await delete_user_file(user.cv_url)
-        if not success:
-            raise CustomHTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete CV from storage",
-                error_code=CV_DELETE_FAILED,
-            )
-
-        # Clear CV URL from user record
-        user.cv_url = None
-        await db.commit()
-
-    except HTTPException as he:
-        raise he
+        await delete_user_cv(db, user_id)
+    except HTTPException:
+        raise
     except Exception as e:
         raise CustomHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete CV: {str(e)}",
             error_code=CV_DELETE_FAILED,
         )
-
 
 @router.get("/{user_id}/cv")
 async def download_cv(
@@ -362,3 +332,139 @@ async def download_cv(
             error_code=GCS_UNAVAILABLE,
         )
 
+@router.post("/{user_id}/profile-image", response_model=UserRead)
+async def upload_profile_image(
+    user_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Upload or update user profile image
+    - Validates ownership/admin rights
+    - Handles file upload via CRUD operation
+    - Returns updated user data
+    """
+    if str(current_user.id) != str(user_id) and not current_user.is_admin:
+        raise CustomHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this profile",
+            error_code=NOT_AUTHORIZED,
+        )
+
+    try:
+        return await upload_user_profile_image(db, user_id, file)
+    except CustomHTTPException:
+        raise
+    except Exception as e:
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Profile image upload failed: {str(e)}",
+            error_code=FILE_UPLOAD_ERROR
+        )
+
+@router.delete("/{user_id}/profile-image", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_profile_image(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Delete user profile image
+    - Validates ownership/admin rights
+    - Removes file from storage via CRUD operation
+    - Clears profile image references
+    """
+    if str(current_user.id) != str(user_id) and not current_user.is_admin:
+        raise CustomHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this profile",
+            error_code=NOT_AUTHORIZED,
+        )
+
+    try:
+        await delete_user_profile_image(db, user_id)
+    except CustomHTTPException:
+        raise
+    except Exception as e:
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete profile image: {str(e)}",
+            error_code=FILE_UPLOAD_ERROR
+        )
+
+@router.get("/{user_id}/profile-image")
+async def get_profile_image(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get signed URL for profile image
+    """
+    user = await get_user_by_id(db, user_id)
+    if not user or not user.profile_image_url:
+        raise CustomHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile image not found",
+            error_code=FILE_UPLOAD_ERROR,
+        )
+
+    try:
+        # Extract bucket name and blob path from URL
+        parsed_url = urlparse(user.profile_image_url)
+        
+        # Handle both formats:
+        # 1. https://storage.googleapis.com/BUCKET_NAME/path/to/file
+        # 2. https://BUCKET_NAME.storage.googleapis.com/path/to/file
+        if parsed_url.netloc == 'storage.googleapis.com':
+            # Format 1: path is /BUCKET_NAME/path/to/file
+            path_parts = parsed_url.path.lstrip('/').split('/')
+            if len(path_parts) < 2:
+                raise ValueError("Invalid GCS URL structure")
+            blob_path = '/'.join(path_parts[1:])
+        else:
+            # Format 2: netloc is BUCKET_NAME.storage.googleapis.com
+            bucket_name = parsed_url.netloc.split('.')[0]
+            blob_path = parsed_url.path.lstrip('/')
+        
+        # Remove any URL query parameters
+        blob_path = blob_path.split('?')[0]
+        
+        logger.info(f"Attempting to access blob at path: {blob_path}")  # Debug logging
+        
+        blob = bucket.blob(blob_path)
+        if not blob.exists():
+            logger.error(f"Blob not found at path: {blob_path}")
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile image not found in storage"
+            )
+
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(minutes=5),
+            method="GET"
+        )
+        
+        logger.info(f"Generated signed URL: {signed_url}")  # Debug logging
+        return RedirectResponse(url=signed_url)
+
+    except ValueError as e:
+        logger.error(f"URL parsing error: {str(e)}")
+        raise CustomHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image URL format"
+        )
+    except GoogleCloudError as e:
+        logger.error(f"GCS error: {str(e)}")
+        raise CustomHTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Storage service unavailable",
+            error_code=GCS_UNAVAILABLE
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate image URL"
+        )
