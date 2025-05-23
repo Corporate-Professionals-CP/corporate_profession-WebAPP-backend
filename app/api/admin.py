@@ -25,7 +25,8 @@ from app.schemas.enums import Industry, ExperienceLevel, JobTitle, PostVisibilit
 from app.crud import (
     user as crud_user,
     post as crud_post,
-    skill as crud_skill
+    skill as crud_skill,
+    job_title as crud_job_title
 )
 from app.core.exceptions import CustomHTTPException
 from app.core.error_codes import (
@@ -280,7 +281,7 @@ async def get_dropdown_options(db: AsyncSession = Depends(get_db)):
     return {
         "industries": Industry.list(),  # Enum-based
         "experience_levels": ExperienceLevel.list(), # Enum-based
-        "job_titles": [],  # str
+        "job_titles": [jt.name for jt in await crud_job_title.get_all(db)],  # from db
         "skills": await crud_skill.get_multi(db)  # From model
     }
 

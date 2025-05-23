@@ -91,6 +91,7 @@ class UserPublic(UserBase):
     id: str
     age: Optional[int]
     status: Optional[str]
+    sex: Optional[Gender]
     industry: Optional[Industry]
     years_of_experience: Optional[ExperienceLevel]
     location: Optional[Location]
