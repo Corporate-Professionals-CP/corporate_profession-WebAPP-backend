@@ -102,15 +102,15 @@ class UserPublic(UserBase):
     recruiter_tag: bool
     topics: Optional[List[str]] = Field(default_factory=list)
     visibility: Optional[ProfileVisibility]
+    profile_image_url: Optional[str] = None
+    avatar_text: Optional[str] = Field(default=None, description="Fallback initials or avatar text")
+    avatar_color: Optional[str] = Field(default=None, description="Fallback avatar color hex")
 
     class Config:
         from_attributes = True
         use_enum_values = True
 
 class UserRead(UserPublic):
-    profile_image_url: Optional[str] = None
-    avatar_text: Optional[str] = Field(default=None, description="Fallback initials or avatar text")
-    avatar_color: Optional[str] = Field(default=None, description="Fallback avatar color hex")
     is_active: Optional[bool] = None
     is_verified: Optional[bool]
     is_admin: Optional[bool]
