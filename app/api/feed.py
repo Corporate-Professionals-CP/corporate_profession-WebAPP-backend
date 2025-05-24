@@ -1,7 +1,7 @@
 """
 feed endpoints (Posting & Feed)
 """
-
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -21,7 +21,7 @@ from app.utils.feed_cookies import (
     track_seen_posts,
     get_seen_posts_from_request
 )
-
+from app.core.exceptions import CustomHTTPException
 from app.core.error_codes import (
     FEED_ERROR,
     NETWORK_FEED_ERROR,
@@ -29,6 +29,24 @@ from app.core.error_codes import (
     UNAUTHORIZED_ACCESS,
     INVALID_REQUEST_PARAMS
 )
+
+# Setup logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Set log level
+
+# Create console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# Add formatter
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+
+# Add handler to logger
+logger.addHandler(ch)
+
+# Now you can use it
+logger.info("This is an info message")
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
@@ -60,6 +78,8 @@ async def get_personalized_feed(
     - Fresh posts
     - Enriched data (comments, reactions)
     """
+
+    logger.info(f"Fetching personalized feed for user_id={current_user.id}")
     try:
         cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
         exclude_ids = get_seen_posts_from_request(request)
@@ -70,7 +90,9 @@ async def get_personalized_feed(
             try:
                 cursor_time_str, cursor_id = cursor.split(",")
                 cursor_time = datetime.fromisoformat(cursor_time_str)
+                logger.info(f"Parsed cursor - time: {cursor_time}, id: {cursor_id}")
             except ValueError:
+                logger.warning(f"Failed to parse cursor '{cursor}' - error: {str(e)}")
                 raise CustomHTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid cursor format: {str(e)}. Expected 'timestamp,post_id'",
@@ -132,7 +154,7 @@ async def get_personalized_feed(
             conditions.append(Post.user_id.in_(related_user_ids))
 
         if current_user.topics:
-            conditions.append(Post.tags.overlap(current_user.topics))
+            conditions.append(Post.engagement["tags"].contains(current_user.topics))
 
         if current_user.industry:
             conditions.append(Post.industry == current_user.industry)
@@ -181,6 +203,7 @@ async def get_personalized_feed(
     except CustomHTTPException:
         raise
     except Exception as e:
+        logger.error(f"Unexpected error in personalized feed for user {current_user.id}: {str(e)}")
         raise CustomHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Unexpected error in personalized feed",
