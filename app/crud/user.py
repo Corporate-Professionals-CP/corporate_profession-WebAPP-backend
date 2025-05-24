@@ -6,6 +6,8 @@ Complete user CRUD operations covering all requirements:
 - Bulk operations
 - GDPR compliance
 """
+import hashlib
+import random
 import os
 from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
@@ -505,6 +507,21 @@ async def delete_user_cv(session: AsyncSession, user_id: UUID) -> User:
                 detail=f"Failed to delete CV: {str(e)}"
             )
     return user
+
+def generate_avatar_fallback(user: User) -> tuple[str, str]:
+    name = user.full_name or user.username
+    initials = "".join([n[0] for n in name.split() if n][:2]).upper()
+
+    # Deterministic color based on user ID
+    hash_digest = hashlib.md5(str(user.id).encode()).hexdigest()
+    color_palette = [
+        "#F44336", "#E91E63", "#9C27B0", "#673AB7",
+        "#3F51B5", "#2196F3", "#03A9F4", "#009688",
+        "#4CAF50", "#FF9800", "#795548"
+    ]
+    color = color_palette[int(hash_digest, 16) % len(color_palette)]
+
+    return initials, color
 
 async def upload_user_profile_image(
     session: AsyncSession,

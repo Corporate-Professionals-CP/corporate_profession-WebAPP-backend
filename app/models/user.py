@@ -180,6 +180,7 @@ class User(UserBase, table=True):
     )
 
     age: Optional[int] = Field(None, ge=18, le=100)
+    profile_image_url: Optional[str] = Field(default=None, index=False)
     sex: Gender = Field(default=Gender.PREFER_NOT_TO_SAY)
     linkedin_profile: Optional[str] = Field(None, regex=r"^https?://(www\.)?linkedin\.com/.*$")
     cv_url: Optional[str] = None
