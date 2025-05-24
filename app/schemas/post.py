@@ -63,6 +63,17 @@ class ReactionBreakdown(BaseModel):
     funny: int = 0
     congratulations: int = 0
 
+class OriginalPostUser(BaseModel):
+    id: UUID
+    full_name: str
+    job_title: Optional[str] = None
+
+class OriginalPostInfo(BaseModel):
+    id: UUID
+    title: str
+    content: Optional[str]
+    user: OriginalPostUser
+
 class PostRead(PostBase):
     """Complete post schema for API responses"""
     id: UUID
@@ -75,11 +86,13 @@ class PostRead(PostBase):
     published_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     total_comments: int = 0
+    total_reposts: int
     total_reactions: int = 0
     is_bookmarked: bool = False
     reactions_breakdown: ReactionBreakdown | None = None
     is_repost: bool = False
     original_post_id: Optional[UUID] = None
+    original_post_info: Optional[OriginalPostInfo] = None
 
 
     @validator('skills', pre=True)

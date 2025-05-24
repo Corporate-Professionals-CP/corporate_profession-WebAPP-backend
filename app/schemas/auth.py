@@ -18,7 +18,9 @@ class TokenData(BaseModel):
 
 class EmailVerify(BaseModel):
     """Email verification request"""
-    token: str
+    otp: str
+    email: Optional[str] = None
+    token: Optional[str] = None
 
 class PasswordReset(BaseModel):
     """Password reset request"""

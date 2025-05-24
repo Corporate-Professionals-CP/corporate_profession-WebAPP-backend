@@ -14,7 +14,7 @@ import uuid
 import requests
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-
+from sqlalchemy import select
 from app.db.database import get_db
 from app.schemas.auth import (
     Token, EmailVerify, PasswordReset, 
@@ -30,6 +30,7 @@ from app.core.security import (
     verify_token,
     get_current_user
 )
+from app.models.user import User
 from starlette.status import *
 from app.core.config import settings
 from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id, get_user_by_email_or_username
@@ -140,7 +141,6 @@ async def login(
         "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     }
 
-
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     request: Request,
@@ -174,17 +174,27 @@ async def signup(
         additional_claims={"type": "verify"}
     )
 
-    # For testing, include verification token in response
+    # Send verification email with OTP
     if settings.ENVIRONMENT == "testing":
-        logger.info(f"Verification token for {user.email}: {verification_token}")
-        verification_data = {"verification_token": verification_token}
+        otp = "123456"  # Fixed OTP for testing
+        verification_data = {"verification_otp": otp}
     else:
-        verification_data = {}
-        await send_verification_email(
+        otp, _ = await send_verification_email(
             email=user.email,
             name=user.full_name,
             token=verification_token
         )
+        verification_data = {}
+
+    # Store OTP in user's profile_preferences (temporary storage)
+    user.profile_preferences = user.profile_preferences or {}
+    user.profile_preferences["email_verification_otp"] = otp
+    user.profile_preferences["email_verification_token"] = verification_token
+    user.profile_preferences["email_verification_expires"] = (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+    
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
 
     return {
         "access_token": access_token,
@@ -323,46 +333,107 @@ async def signup_with_google(
             error_code="GOOGLE_AUTH_FAILED"
         )
 
-
 @router.post("/verify-email", response_model=UserRead)
 async def verify_email(
     verify: EmailVerify,
     db: AsyncSession = Depends(get_db)
 ):
+    # Find all users with matching OTP in their profile_preferences
+    stmt = select(User).where(
+        User.profile_preferences["email_verification_otp"].as_string() == verify.otp
+    )
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Invalid OTP or user not found")
+
+    # Check if already verified
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already verified"
+        )
+
+    # Check OTP expiration
+    prefs = user.profile_preferences or {}
+    expires_at_str = prefs.get("email_verification_expires")
+
+    if not expires_at_str or datetime.utcnow() > datetime.fromisoformat(expires_at_str):
+        raise HTTPException(status_code=400, detail="OTP has expired")
+
     try:
-        # Verify token and get user
-        payload = verify_token(verify.token, expected_type="verify")
-        user = await get_user_by_id(db, payload["sub"])
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        # Verify the stored token (not the one from request)
+        stored_token = prefs.get("email_verification_token")
+        if not stored_token:
+            raise HTTPException(status_code=400, detail="Invalid verification")
 
-        # Check if already verified
-        if user.is_verified:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already verified"
-            )
+        payload = verify_token(stored_token, expected_type="verify")
+        if payload["sub"] != str(user.id):
+            raise HTTPException(status_code=400, detail="Invalid verification")
 
-        # Directly update the verification status
+        # Update user
         user.is_verified = True
         user.updated_at = datetime.utcnow()
-        
-        try:
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-            
-            # Return the updated user
-            return user
-        except Exception as e:
-            await db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to verify email: {str(e)}"
-            )
 
+        # Clean up OTP data
+        if "email_verification_otp" in user.profile_preferences:
+            del user.profile_preferences["email_verification_otp"]
+            del user.profile_preferences["email_verification_token"]
+            del user.profile_preferences["email_verification_expires"]
+
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        return user
     except JWTError:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify email: {str(e)}"
+        )
+
+@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+async def resend_verification(
+    email: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    user = await get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already verified"
+        )
+
+    # Generate new token and OTP
+    verification_token = create_access_token(
+        user_id=str(user.id),
+        expires_delta=timedelta(minutes=30),
+        additional_claims={"type": "verify"}
+    )
+
+    otp, _ = await send_verification_email(
+        email=user.email,
+        name=user.full_name,
+        token=verification_token
+    )
+
+    # Store new OTP
+    user.profile_preferences = user.profile_preferences or {}
+    user.profile_preferences["email_verification_otp"] = otp
+    user.profile_preferences["email_verification_token"] = verification_token
+    user.profile_preferences["email_verification_expires"] = (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+
+    db.add(user)
+    await db.commit()
+
+    return {"message": "Verification email resent"}
 
 @router.post("/refresh-token", response_model=Token)
 async def refresh_token(

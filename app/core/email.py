@@ -1,6 +1,8 @@
 import logging
 import asyncio
 import resend
+import random
+import string
 from fastapi import HTTPException, status
 from app.core.config import settings
 
@@ -8,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 resend.api_key = settings.RESEND_API_KEY
+
+async def generate_otp() -> str:
+    """Generate a 6-digit numeric OTP"""
+    return ''.join(random.choices(string.digits, k=6))
 
 async def _send_email_resend(to_email: str, to_name: str, subject: str, text: str, html: str):
     logger.info(f"Resend API key: {settings.RESEND_API_KEY}")
@@ -30,9 +36,20 @@ async def _send_email_resend(to_email: str, to_name: str, subject: str, text: st
 
 async def send_verification_email(email: str, name: str, token: str) -> None:
     subject = "Verify Your Email"
-    text = f"Hello {name},\n\nPlease verify your email: {settings.FRONTEND_URL}/verify-email?token={token}"
-    html = f"<h3>Hello {name},</h3><p>Please <a href='{settings.FRONTEND_URL}/verify-email?token={token}'>verify your email</a>.</p>"
-    await _send_email_resend(email, name, subject, text, html)
+    otp = await generate_otp()
+    
+    # Store the OTP in the user's record (we'll use profile_preferences field)
+    # This is a temporary solution - in production, consider a dedicated OTP storage
+    
+    text = f"Hello {name},\n\nYour verification code is: {otp}\n\nEnter this code to verify your email."
+    html = f"""
+        <h3>Hello {name},</h3>
+        <p>Your verification code is: <strong>{otp}</strong></p>
+        <p>Enter this code to verify your email.</p>
+    """
+    
+    # We'll return the OTP to store it in the user record
+    return otp, await _send_email_resend(email, name, subject, text, html)
 
 async def send_password_reset_email(email: str, name: str, token: str) -> None:
     subject = "Password Reset Instructions"
