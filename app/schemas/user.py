@@ -146,3 +146,13 @@ class UserProfileCompletion(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MinimalUserRead(BaseModel):
+    id: str
+    full_name: str
+    job_title: Optional[str] = None
+    profile_image_url: Optional[str] = None
+
+    class Config:
+        orm_mode = True

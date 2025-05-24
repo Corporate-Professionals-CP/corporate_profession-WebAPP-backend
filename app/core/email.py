@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 resend.api_key = settings.RESEND_API_KEY
 
 async def _send_email_resend(to_email: str, to_name: str, subject: str, text: str, html: str):
+    logger.info(f"Resend API key: {settings.RESEND_API_KEY}")
     try:
         await asyncio.to_thread(resend.Emails.send, {
             "from": f"{settings.EMAILS_FROM_NAME} <{settings.EMAILS_FROM_EMAIL}>",

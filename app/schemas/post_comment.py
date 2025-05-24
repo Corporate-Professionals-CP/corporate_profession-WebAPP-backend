@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
+from .user import MinimalUserRead
 
 class PostCommentCreate(BaseModel):
     post_id: str
@@ -11,10 +12,10 @@ class PostCommentUpdate(BaseModel):
     content: str
 
 class PostCommentRead(BaseModel):
-    id: str
     content: str
     user_id: str
     post_id: str
+    user: MinimalUserRead
     created_at: datetime
 
     class Config:

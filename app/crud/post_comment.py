@@ -4,6 +4,7 @@ from app.models.post_comment import PostComment
 from app.schemas.post_comment import PostCommentCreate, PostCommentUpdate
 from typing import List
 from app.core.exceptions import CustomHTTPException
+from sqlalchemy.orm import selectinload
 
 async def create_comment(db: AsyncSession, user_id: str, post_id: str, data: PostCommentCreate) -> PostComment:
     try:
@@ -15,9 +16,14 @@ async def create_comment(db: AsyncSession, user_id: str, post_id: str, data: Pos
     except Exception as e:
         raise CustomHTTPException(status_code=500, detail=f"Failed to create comment: {str(e)}")
 
+
 async def get_comments_for_post(db: AsyncSession, post_id: str) -> List[PostComment]:
     try:
-        result = await db.execute(select(PostComment).where(PostComment.post_id == post_id))
+        result = await db.execute(
+            select(PostComment)
+            .options(selectinload(PostComment.user))
+            .where(PostComment.post_id == post_id)
+        )
         return result.scalars().all()
     except Exception as e:
         raise CustomHTTPException(status_code=500, detail=f"Failed to fetch comments: {str(e)}")
