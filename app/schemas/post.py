@@ -107,12 +107,6 @@ class PostRead(PostBase):
             return values['user'].full_name
         return v
 
-    @validator('skills', pre=True)
-    def convert_skills(cls, v):
-        if v and hasattr(v[0], 'name'):
-            return [skill.name for skill in v]
-        return v or []
-
     class Config:
         from_attributes = True
         json_encoders = {
