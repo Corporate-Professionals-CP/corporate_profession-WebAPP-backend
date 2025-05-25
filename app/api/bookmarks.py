@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, status, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from typing import List
@@ -93,21 +93,53 @@ async def bookmark_post(
     except CustomHTTPException as e:
         raise e
 
-
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_bookmark(
     post_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    """Remove a bookmark for a post"""
     try:
-        deleted = await delete_bookmark(db, current_user.id, post_id)
-        if not deleted:
+        # Verify the post exists first
+        post = await db.get(Post, str(post_id))
+        if not post:
+            raise CustomHTTPException(status_code=404, detail="Post not found")
+
+        # Delete the bookmark regardless of who created the post
+        result = await db.execute(
+            select(Bookmark).where(
+                Bookmark.user_id == str(current_user.id),
+                Bookmark.post_id == str(post_id)
+            )
+        )
+        bookmark = result.scalar_one_or_none()
+        
+        if not bookmark:
             raise CustomHTTPException(status_code=404, detail="Bookmark not found")
+
+        await db.delete(bookmark)
+        await db.commit()
+        
+        # Update bookmark count
+        post.engagement["bookmark_count"] = max(0, post.engagement.get("bookmark_count", 1) - 1)
+        await db.commit()
+        
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     except CustomHTTPException as e:
         raise e
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error deleting bookmark: {str(e)}")
+        raise CustomHTTPException(
+            status_code=500,
+            detail="Failed to delete bookmark"
+        )
 
-@router.post("/{post_id}/bookmark", status_code=200)
+
+
+@router.post("/{post_id}/toggle", status_code=200)
 async def toggle_bookmark(
     post_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -115,23 +147,27 @@ async def toggle_bookmark(
 ):
     """Toggle bookmark status for a post"""
     try:
+        # Verify post exists
         post = await db.get(Post, str(post_id))
         if not post:
             raise CustomHTTPException(status_code=404, detail="Post not found")
 
-        existing = await db.execute(
+        # Check existing bookmark
+        result = await db.execute(
             select(Bookmark).where(
                 Bookmark.user_id == str(current_user.id),
                 Bookmark.post_id == str(post_id)
             )
         )
-        existing = existing.scalar_one_or_none()
+        existing = result.scalar_one_or_none()
 
         if existing:
+            # Delete existing bookmark
             await db.delete(existing)
             post.engagement["bookmark_count"] = max(0, post.engagement.get("bookmark_count", 1) - 1)
             action = False
         else:
+            # Create new bookmark
             db.add(Bookmark(user_id=str(current_user.id), post_id=str(post_id)))
             post.engagement["bookmark_count"] = post.engagement.get("bookmark_count", 0) + 1
             action = True
@@ -141,5 +177,10 @@ async def toggle_bookmark(
 
     except CustomHTTPException as e:
         raise e
-    except Exception:
-        raise CustomHTTPException(status_code=500, detail="Something went wrong while opening bookmark")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error toggling bookmark: {str(e)}")
+        raise CustomHTTPException(
+            status_code=500,
+            detail="Failed to toggle bookmark"
+        )

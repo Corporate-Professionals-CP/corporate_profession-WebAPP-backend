@@ -187,7 +187,12 @@ async def get_personalized_feed(
 
         posts = [row[0] for row in rows[:limit]]
         users = [row[1] for row in rows[:limit]]
-        enriched_posts = await enrich_multiple_posts(db, posts, users)
+        enriched_posts = await enrich_multiple_posts(
+            db,
+            posts,
+            users,
+            current_user_id=str(current_user.id) if current_user else None
+        )
 
         next_cursor = None
         if len(rows) > limit:
@@ -302,7 +307,12 @@ async def get_network_feed(
 
         posts = [row[0] for row in rows[:limit]]
         users = [row[1] for row in rows[:limit]]
-        enriched_posts = await enrich_multiple_posts(db, posts, users)
+        enriched_posts = await enrich_multiple_posts(
+            db,
+            posts,
+            users,
+            current_user_id=str(current_user.id) if current_user else None
+        )
 
         next_cursor = None
         if len(rows) > limit:

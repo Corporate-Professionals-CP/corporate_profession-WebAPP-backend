@@ -15,6 +15,7 @@ from sqlalchemy import select, and_, or_, func, desc, cast, JSON, Float, type_co
 from fastapi import HTTPException, status
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
 from app.models.post_comment import PostComment
+from app.models.bookmark import Bookmark
 from app.models.post_reaction import ReactionType, PostReaction
 from app.models.user import User
 from app.models.skill import Skill
@@ -766,10 +767,15 @@ async def get_multi(
     )
     return result.scalars().all()
 
-async def enrich_multiple_posts(db: AsyncSession, posts: List[Post], users: List[User]) -> List[PostRead]:
+async def enrich_multiple_posts(
+    db: AsyncSession, 
+    posts: List[Post], 
+    users: List[User],
+    current_user_id: Optional[str] = None
+) -> List[PostRead]:
     post_ids = [str(post.id) for post in posts]
 
-    # Reactions (bulk fetch)
+    # Reactions (bulk fetch - existing)
     reaction_data = await db.execute(
         select(
             PostReaction.post_id,
@@ -780,39 +786,54 @@ async def enrich_multiple_posts(db: AsyncSession, posts: List[Post], users: List
     )
     reaction_map = {}
     for pid, rtype, count in reaction_data.all():
-        if pid not in reaction_map:
-            reaction_map[pid] = {}
-        reaction_map[pid][rtype] = count
+        reaction_map.setdefault(pid, {})[rtype] = count
 
-    # Comments (bulk fetch)
+    # Comments (bulk fetch - existing)
     comment_data = await db.execute(
         select(
             PostComment.post_id,
-            func.count(PostComment.id)
-        ).where(PostComment.post_id.in_(post_ids))
+            func.count(PostComment.id))
+        .where(PostComment.post_id.in_(post_ids))
         .group_by(PostComment.post_id)
     )
     comment_map = {pid: count for pid, count in comment_data.all()}
 
+    # Bookmark status (optimized bulk fetch)
+    bookmark_map = {}
+    if current_user_id:  # Only check if we have a user
+        bookmark_data = await db.execute(
+            select(
+                Bookmark.post_id,
+                func.count(Bookmark.id))  # Count per post
+            .where(
+                Bookmark.post_id.in_(post_ids),
+                Bookmark.user_id == current_user_id
+            )
+            .group_by(Bookmark.post_id)
+        )
+        # Create map of {post_id: bookmark_count}
+        bookmark_map = {str(pid): count for pid, count in bookmark_data.all()}
+
     # Assemble enriched posts
     enriched = []
     for post, user in zip(posts, users):
+        post_id_str = str(post.id)
         enriched_data = {
             **post.__dict__,
             "user": user,
-            "total_comments": comment_map.get(str(post.id), 0),
-            "total_reactions": sum(reaction_map.get(str(post.id), {}).values()),
+            "total_comments": comment_map.get(post_id_str, 0),
+            "total_reactions": sum(reaction_map.get(post_id_str, {}).values()),
+            "is_bookmarked": bookmark_map.get(post_id_str, 0) > 0,  # True if bookmarked
             "reactions_breakdown": {
-                r: reaction_map.get(str(post.id), {}).get(r, 0)
+                r: reaction_map.get(post_id_str, {}).get(r, 0)
                 for r in ReactionType.__members__.keys()
             },
-            "is_active": post.is_active
+            "is_active": post.is_active,
+            "bookmark_count": bookmark_map.get(post_id_str, 0)  # Total bookmark count
         }
         enriched.append(PostRead(**enriched_data))
 
     return enriched
-
-
 
 async def increment_post_engagement(
     session: AsyncSession,
