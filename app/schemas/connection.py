@@ -15,6 +15,7 @@ class ConnectionUser(BaseModel):
     pronouns: Optional[str] = None
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
+    job_title: Optional[str] = None
     profile_image_url: Optional[str] = None
     avatar_text: Optional[str] = Field(default=None, description="Fallback initials or avatar text")
     recruiter_tag: bool = False

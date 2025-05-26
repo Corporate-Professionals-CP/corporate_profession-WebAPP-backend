@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     GCS_PROFILE_IMAGE_BASE_PATH: str = "users/{user_id}/profile_images"
     MAX_PROFILE_IMAGE_SIZE: int = 5 * 1024 * 1024
 
+    MAX_POST_MEDIA_SIZE: int = 50 * 1024 * 1024  # 50MB
+    GCS_POST_MEDIA_BASE_PATH: str = "posts/{user_id}"
+
     # Email Service
 
     RESEND_API_KEY: str

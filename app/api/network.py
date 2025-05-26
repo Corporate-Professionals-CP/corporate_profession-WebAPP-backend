@@ -212,6 +212,7 @@ async def get_connection_suggestions(
                     pronouns=getattr(user, "pronouns", None),
                     industry=getattr(user, "industry", None),
                     years_of_experience=getattr(user, "years_of_experience", None),
+                    job_title=getattr(user, "job_title", None),
                     profile_image_url=getattr(user, "profile_image_url", None),
                     avatar_text=getattr(user, "avatar_text", None),
                     recruiter_tag=getattr(user, "recruiter_tag", False),
