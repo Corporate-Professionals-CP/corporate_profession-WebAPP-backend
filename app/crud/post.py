@@ -193,6 +193,7 @@ async def update_post(
             detail=f"Failed to update post: {str(e)}"
         )
 
+# crud.py (updated repost_post function)
 async def repost_post(
     session: AsyncSession,
     original_post_id: UUID,
@@ -207,28 +208,34 @@ async def repost_post(
         .where(Post.id == str(original_post_id))
     )
     original_post = result.scalar_one_or_none()
-    
+
     if not original_post:
         raise HTTPException(status_code=404, detail="Original post not found")
 
     # Get user identifier safely
     user_identifier = (
+        original_post.user.username 
+        if hasattr(original_post.user, 'username') else
         original_post.user.full_name 
-        if hasattr(original_post.user, 'full_name') 
-        else getattr(original_post.user, 'email', 'a user').split('@')[0]
+        if hasattr(original_post.user, 'full_name') else
+        getattr(original_post.user, 'email', 'a user').split('@')[0]
     )
 
-    # Build content
-    # Replace the content building section with:
+    # Build content with Twitter-style formatting
     if quote_text:
-        # Clean and format the quote text
         clean_quote = quote_text.strip()
         clean_original = original_post.content.strip()
-        content = f"{clean_quote}\n\n—— Reposted from @{user_identifier} ——\n\n{clean_original}"
-        title = f"Repost: {original_post.title[:50]}..." 
+        
+        # New format: Quote first, then attribution, then original post
+        content = (
+            f"{clean_quote}\n\n"
+            f"—— Reposted from @{user_identifier} ——\n\n"
+            f"{clean_original}"
+        )
+        title = f"Quote: {original_post.title[:50]}..." if original_post.title else "Quote Repost"
     else:
-        content = original_post.content
-        title = f"Repost: {original_post.title}"
+        content = f"Reposted from @{user_identifier}:\n\n{original_post.content}"
+        title = f"Repost: {original_post.title}" if original_post.title else "Repost"
 
     # Create the repost
     repost = Post(
