@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel
 
@@ -20,3 +20,9 @@ class NotificationRead(BaseModel):
     class Config:
         from_attributes = True
 
+class NotificationResponse(BaseModel):
+    unread_count: int
+    notifications: List[NotificationRead]
+
+    class Config:
+        from_attributes = True
