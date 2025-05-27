@@ -155,4 +155,4 @@ class MinimalUserRead(BaseModel):
     profile_image_url: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

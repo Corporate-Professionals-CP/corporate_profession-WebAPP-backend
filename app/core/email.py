@@ -51,9 +51,17 @@ async def send_verification_email(email: str, name: str, token: str) -> None:
     # We'll return the OTP to store it in the user record
     return otp, await _send_email_resend(email, name, subject, text, html)
 
-async def send_password_reset_email(email: str, name: str, token: str) -> None:
-    subject = "Password Reset Instructions"
-    text = f"Hello {name},\n\nReset your password: {settings.FRONTEND_URL}/reset-password?token={token}"
-    html = f"<h3>Hello {name},</h3><p><a href='{settings.FRONTEND_URL}/reset-password?token={token}'>Reset your password here</a>.</p>"
-    await _send_email_resend(email, name, subject, text, html)
+async def send_password_reset_email(email: str, name: str) -> str:
+    """Send password reset OTP email and return the generated OTP"""
+    subject = "Password Reset OTP"
+    otp = await generate_otp()
 
+    text = f"Hello {name},\n\nYour password reset OTP is: {otp}\n\nEnter this code to reset your password."
+    html = f"""
+        <h3>Hello {name},</h3>
+        <p>Your password reset OTP is: <strong>{otp}</strong></p>
+        <p>Enter this code to reset your password.</p>
+    """
+
+    await _send_email_resend(email, name, subject, text, html)
+    return otp

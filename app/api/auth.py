@@ -48,7 +48,11 @@ from app.core.error_codes import (
     MISSING_GOOGLE_EMAIL,
     EMAIL_ALREADY_REGISTERED,
     INVALID_GOOGLE_TOKEN,
-    GOOGLE_AUTH_FAILED
+    GOOGLE_AUTH_FAILED,
+    FAILED_TO_VERIFY_EMAIL,
+    OTP_EXPIRED,
+    PASSWORD_LENGTH,
+    PASSWORD_MUST_NOT_THE_SAME
 )
 
 
@@ -153,14 +157,16 @@ async def signup(
 
     if existing_user:
         if existing_user.is_active:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
+                error_code=EMAIL_ALREADY_REGISTERED
             )
         else:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This email was previously registered (account deactivated). Please contact support to reactivate."
+                detail="This email was previously registered (account deactivated). Please contact support to reactivate.",
+                error_code=ACCOUNT_DEACTIVATION
             )
 
     # Create new user
@@ -218,9 +224,10 @@ async def google_oauth(
         )
 
         if not id_info.get("email_verified", False):
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Google email not verified"
+                detail="Google email not verified",
+                error_code=GOOGLE_EMAIL_NOT_VERIFIED
             )
 
         user = await get_user_by_email(db, id_info["email"])
@@ -278,7 +285,7 @@ async def signup_with_google(
             raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Google email not verified",
-                error_code="GOOGLE_EMAIL_NOT_VERIFIED"
+                error_code=GOOGLE_EMAIL_NOT_VERIFIED
             )
 
         # Extract email safely
@@ -287,7 +294,7 @@ async def signup_with_google(
             raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Google response missing email",
-                error_code="MISSING_GOOGLE_EMAIL"
+                error_code=MISSING_GOOGLE_EMAIL
             )
 
         # Check existing user
@@ -296,7 +303,7 @@ async def signup_with_google(
             raise CustomHTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered",
-                error_code="EMAIL_ALREADY_REGISTERED"
+                error_code=EMAIL_ALREADY_REGISTERED
             )
 
         # Create user data
@@ -324,14 +331,14 @@ async def signup_with_google(
         raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid Google token: {str(e)}",
-            error_code="INVALID_GOOGLE_TOKEN"
+            error_code=INVALID_GOOGLE_TOKEN
         )
     except Exception as e:
         logger.error(f"Google auth error: {str(e)}", exc_info=True)
         raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Google authentication failed: {str(e)}",
-            error_code="GOOGLE_AUTH_FAILED"
+            error_code=GOOGLE_AUTH_FAILED
         )
 
 @router.post("/verify-email", response_model=UserRead)
@@ -351,9 +358,10 @@ async def verify_email(
 
     # Check if already verified
     if user.is_verified:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already verified"
+            detail="Email already verified",
+            error_code=EMAIL_ALREADY_VERIFIED
         )
 
     # Check OTP expiration
@@ -392,9 +400,10 @@ async def verify_email(
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     except Exception as e:
         await db.rollback()
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to verify email: {str(e)}"
+            detail=f"Failed to verify email: {str(e)}",
+            error_code=FAILED_TO_VERIFY_EMAIL
         )
 
 @router.post("/resend-verification", status_code=status.HTTP_200_OK)
@@ -407,9 +416,10 @@ async def resend_verification(
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.is_verified:
-        raise HTTPException(
+        raise CustomHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already verified"
+            detail="Email already verified",
+            error_code=EMAIL_ALREADY_VERIFIED
         )
 
     # Generate new token and OTP
@@ -425,17 +435,18 @@ async def resend_verification(
         token=verification_token
     )
 
-    # Store new OTP
+    # Key Fix: Store OTP exactly as verify-email expects it
     user.profile_preferences = user.profile_preferences or {}
-    user.profile_preferences["email_verification_otp"] = otp
+    user.profile_preferences["email_verification_otp"] = str(otp)  # Explicit string conversion
     user.profile_preferences["email_verification_token"] = verification_token
-    user.profile_preferences["email_verification_expires"] = (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+    user.profile_preferences["email_verification_expires"] = (
+        datetime.utcnow() + timedelta(minutes=30)
+    ).isoformat()  # ISO format string
 
     db.add(user)
     await db.commit()
 
     return {"message": "Verification email resent"}
-
 @router.post("/refresh-token", response_model=Token)
 async def refresh_token(
     refresh_token: str = Body(...),
@@ -445,9 +456,10 @@ async def refresh_token(
         payload = verify_token(refresh_token, expected_type="refresh")
         user = await get_user_by_id(db, payload["sub"])
         if not user.is_active:
-            raise HTTPException(
+            raise CustomHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account is deactivated"
+                detail="Account is deactivated",
+                error_code=ACCOUNT_DEACTIVATION
             )
 
         scopes = ["user"]
@@ -465,90 +477,89 @@ async def refresh_token(
     except JWTError:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-@router.post("/forgot-password")
-async def forgot_password(
+@router.post("/request-password-reset", status_code=status.HTTP_200_OK)
+async def request_password_reset(
     email: str = Body(..., embed=True),
     db: AsyncSession = Depends(get_db)
 ):
     user = await get_user_by_email(db, email)
-    if user:
-        reset_token = create_access_token(
-            user_id=str(user.id),
-            expires_delta=timedelta(minutes=30),
-            additional_claims={"type": "reset"}
-        )
+    if not user:
+        # Don't reveal if user exists for security
+        return {"message": "If an account exists with this email, a reset OTP has been sent"}
 
-        # Add this logging statement
-        logger.info(f"Password reset token for {email}: {reset_token}")
+    # Generate and send OTP
+    otp = await send_password_reset_email(email=user.email, name=user.full_name)
 
-        await send_password_reset_email(
-            email=user.email,
-            name=user.full_name,
-            token=reset_token
-        )
-    return {"message": "Check your email, reset instructions sent"}
+    # Store OTP in user's profile_preferences
+    user.profile_preferences = user.profile_preferences or {}
+    user.profile_preferences["password_reset_otp"] = str(otp)
+    user.profile_preferences["password_reset_expires"] = (
+        datetime.utcnow() + timedelta(minutes=30)
+    ).isoformat()
 
+    db.add(user)
+    await db.commit()
 
-@router.post("/reset-password")
+    return {"message": "Password reset OTP sent"}
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
 async def reset_password(
     reset: PasswordReset,
     db: AsyncSession = Depends(get_db)
 ):
-    try:
-        # Validate token structure
-        if not reset.token or len(reset.token.split('.')) != 3:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token format"
-            )
-
-        # Validate password
-        if len(reset.new_password) < 8:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password must be at least 8 characters"
-            )
-
-        # Verify token
-        payload = verify_token(reset.token, expected_type="reset")
-        user = await get_user_by_id(db, payload["sub"])
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
-        # Check password reuse
-        if verify_password(reset.new_password, user.hashed_password):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="New password cannot be the same as current password"
-            )
-
-        # Prepare update data (plain dict, no .dict() calls)
-        update_data = {
-            "hashed_password": get_password_hash(reset.new_password),
-            "updated_at": datetime.utcnow()  # Add timestamp update
-        }
-
-        # Perform update
-        await update_user(db, user.id, update_data)
-        
-        logger.info(f"Password reset successful for user {user.email}")
-        return {"message": "Password updated successfully"}
-
-    except JWTError as e:
-        logger.error(f"Token verification failed: {str(e)}", exc_info=True)
+    # Find user by email
+    user = await get_user_by_email(db, reset.email)
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error during password reset: {str(e)}", exc_info=True)
+
+    # Check OTP
+    prefs = user.profile_preferences or {}
+    stored_otp = prefs.get("password_reset_otp")
+    expires_at_str = prefs.get("password_reset_expires")
+
+    if not stored_otp or str(reset.otp) != str(stored_otp):
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP"
         )
+
+    # Check expiration
+    if not expires_at_str or datetime.utcnow() > datetime.fromisoformat(expires_at_str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP has expired",
+            error_code=OTP_EXPIRED
+        )
+
+    # Validate new password
+    if len(reset.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters",
+            error_code=PASSWORD_LENGTH
+        )
+
+    # Check password reuse
+    if verify_password(reset.new_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password cannot be the same as current password",
+            error_code=PASSWORD_MUST_NOT_THE_SAME
+        )
+
+    # Update password
+    user.hashed_password = get_password_hash(reset.new_password)
+    user.updated_at = datetime.utcnow()
+
+    # Clear OTP data
+    if "password_reset_otp" in user.profile_preferences:
+        del user.profile_preferences["password_reset_otp"]
+        del user.profile_preferences["password_reset_expires"]
+
+    db.add(user)
+    await db.commit()
+
+    return {"message": "Password updated successfully"}

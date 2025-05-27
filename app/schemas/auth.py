@@ -24,7 +24,8 @@ class EmailVerify(BaseModel):
 
 class PasswordReset(BaseModel):
     """Password reset request"""
-    token: str
+    email: str
+    otp: str
     new_password: str
 
 class GoogleToken(BaseModel):
