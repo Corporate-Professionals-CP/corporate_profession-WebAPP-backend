@@ -39,6 +39,15 @@ PROFILE_IMAGE_ALLOWED_MIME_TYPES = {
     "image/gif": "gif"
 }
 
+POST_MEDIA_ALLOWED_MIME_TYPES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "video/mp4": "mp4",
+    "video/quicktime": "mov"
+}
+
 async def save_uploaded_file(file: UploadFile, user_id: str, file_type: str = "cv") -> str:
     """Upload file to Google Cloud Storage with validation"""
     try:
@@ -51,6 +60,10 @@ async def save_uploaded_file(file: UploadFile, user_id: str, file_type: str = "c
             allowed_types = PROFILE_IMAGE_ALLOWED_MIME_TYPES
             max_size = settings.MAX_PROFILE_IMAGE_SIZE
             base_path = settings.GCS_PROFILE_IMAGE_BASE_PATH.format(user_id=user_id)
+        elif file_type == "post_media":  # for post with media
+            allowed_types = POST_MEDIA_ALLOWED_MIME_TYPES
+            max_size = settings.MAX_POST_MEDIA_SIZE
+            base_path = settings.GCS_POST_MEDIA_BASE_PATH.format(user_id=user_id)
         else:
             raise HTTPException(400, "Invalid file type specified")
 
@@ -80,7 +93,7 @@ async def save_uploaded_file(file: UploadFile, user_id: str, file_type: str = "c
         blob = bucket.blob(blob_path)
         blob.upload_from_file(file.file, content_type=mime_type)
 
-        return blob_path
+        return f"https://storage.googleapis.com/{settings.GCS_BUCKET_NAME}/{blob_path}"
 
 
     except HTTPException:
@@ -89,32 +102,25 @@ async def save_uploaded_file(file: UploadFile, user_id: str, file_type: str = "c
         logger.error(f"File upload failed: {str(e)}")
         raise HTTPException(500, "Failed to process file upload")
 
-async def delete_user_file(blob_reference: str) -> bool:
+async def delete_user_file(url: str) -> bool:
+    """Delete file using full URL"""
     try:
-        # If input looks like a full URL, extract blob path from URL path
-        if blob_reference.startswith("http"):
-            parsed_url = urlparse(blob_reference)
-            path_parts = parsed_url.path.lstrip('/').split('/')
-            if len(path_parts) > 1:
-                # Remove bucket name from path parts
-                blob_path = '/'.join(path_parts[1:])
-            else:
-                return False
-        else:
-            # If already a blob path, use it as is
-            blob_path = blob_reference
-
-        logger.info(f"Deleting blob at path: {blob_path}")
-        blob = bucket.blob(blob_path)
-
-        if not blob.exists():
-            logger.warning(f"Blob not found: {blob_path}")
+        # Extract bucket-relative path from URL
+        if not url.startswith(settings.GCS_PUBLIC_BASE_URL):
+            logger.error(f"Invalid URL format for deletion: {url}")
             return False
-
+            
+        blob_path = url.replace(f"{settings.GCS_PUBLIC_BASE_URL}/", "")
+        blob = bucket.blob(blob_path)
+        
+        if not blob.exists():
+            logger.warning(f"File not found: {blob_path}")
+            return False
+            
         blob.delete()
-        logger.info(f"Blob deleted: {blob_path}")
+        logger.info(f"Deleted: {blob_path}")
         return True
+        
     except Exception as e:
-        logger.error(f"File deletion failed: {str(e)}")
+        logger.error(f"Deletion failed: {str(e)}")
         return False
-

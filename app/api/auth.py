@@ -19,7 +19,7 @@ from app.db.database import get_db
 from app.schemas.auth import (
     Token, EmailVerify, PasswordReset, 
     GoogleToken, UserCreateWithGoogle,
-    SignupResponse
+    SignupResponse, AuthResponse
 )
 from app.schemas.user import UserRead, UserCreate, UserUpdate
 from app.core.security import (
@@ -92,8 +92,8 @@ if all([settings.GOOGLE_CLIENT_ID, settings.GOOGLE_CLIENT_SECRET]):
         server_metadata_url=settings.GOOGLE_METADATA_URL
     )
 
-@router.post("/token", response_model=Token)
-@router.post("/login", response_model=Token)
+@router.post("/token", response_model=AuthResponse)
+@router.post("/login", response_model=AuthResponse)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
@@ -143,7 +143,8 @@ async def login(
         "access_token": create_access_token(user.id, scopes),
         "refresh_token": create_refresh_token(user.id),
         "token_type": "bearer",
-        "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        "user": user
     }
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)

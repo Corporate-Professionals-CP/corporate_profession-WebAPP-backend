@@ -11,6 +11,9 @@ from app.schemas.enums import (
     EducationLevel
 )
 from app.schemas.skill import SkillRead
+from app.schemas.contact import ContactRead
+from app.schemas.work_experience import WorkExperienceRead
+from app.schemas.education import EducationRead
 
 class UserBase(BaseModel):
     full_name: Optional[str] = Field(..., min_length=2, max_length=100)
@@ -36,7 +39,6 @@ class UserBase(BaseModel):
         description="Selected interest topics",
         example=["Leadership & Management", "Artificial Intelligence & Automation", "Software Engineering"]
     )
-    education: Optional[EducationLevel] = None
     recruiter_tag: Optional[bool] = False
 
 class UserCreate(UserBase):
@@ -67,14 +69,15 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-
+    work_experience: List[WorkExperienceRead] = []
     company: Optional[str] = None
+    contact: List[ContactRead] = []
     job_title: Optional[str] = None
     bio: Optional[str] = None
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
     location: Optional[Location] = None
-    education: Optional[EducationLevel] = None
+    education: List[EducationRead] = []
     age: Optional[int] = None
     sex: Optional[Gender] = None
     status: Optional[str] = None
@@ -83,8 +86,12 @@ class UserUpdate(BaseModel):
     visibility: Optional[ProfileVisibility] = None
     recruiter_tag: Optional[bool] = None
     is_admin: Optional[bool] = None
+    cv_url: Optional[str] = None
     topics: Optional [List[str]] = Field(default_factory=list)
     is_active: Optional[bool] = None
+    cv_url: Optional[str] = None
+    profile_image_url: Optional[str] = None
+    profile_image_uploaded_at: Optional[datetime] = None
 
 class UserPublic(UserBase):
     full_name: Optional[str]
@@ -93,16 +100,21 @@ class UserPublic(UserBase):
     status: Optional[str]
     sex: Optional[Gender]
     industry: Optional[Industry]
+    work_experience: List[WorkExperienceRead] = []
+    education: List[EducationRead] = []
+    contact: List[ContactRead] = []
     years_of_experience: Optional[ExperienceLevel]
     location: Optional[Location]
-    education: Optional[EducationLevel]
     skills: List[SkillRead] = []
     profile_completion: float = Field(0.0)  # Default value
+    sections: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    missing_fields: Optional[List[str]] = None
     created_at: datetime
     recruiter_tag: bool
     topics: Optional[List[str]] = Field(default_factory=list)
     visibility: Optional[ProfileVisibility]
     profile_image_url: Optional[str] = None
+    profile_image_uploaded_at: Optional[datetime] = None
     avatar_text: Optional[str] = Field(default=None, description="Fallback initials or avatar text")
     avatar_color: Optional[str] = Field(default=None, description="Fallback avatar color hex")
 
@@ -114,6 +126,7 @@ class UserRead(UserPublic):
     is_active: Optional[bool] = None
     is_verified: Optional[bool]
     is_admin: Optional[bool]
+    cv_url: Optional[str] = None
     updated_at: datetime
 
 class UserDirectoryItem(BaseModel):
@@ -153,6 +166,25 @@ class MinimalUserRead(BaseModel):
     full_name: str
     job_title: Optional[str] = None
     profile_image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class UserProfileResponse(BaseModel):
+    id: str
+    email: str
+    full_name: Optional[str]
+    bio: Optional[str]
+    recruiter_tag: bool 
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+    updated_at: datetime
+
+    work_experience: List[WorkExperienceRead] = []
+    education: List[EducationRead] = []
+    contact: List[ContactRead] = []
 
     class Config:
         from_attributes = True

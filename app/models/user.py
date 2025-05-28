@@ -181,6 +181,7 @@ class User(UserBase, table=True):
 
     age: Optional[int] = Field(None, ge=18, le=100)
     profile_image_url: Optional[str] = Field(default=None, index=False)
+    profile_image_uploaded_at: Optional[datetime] = Field(default=None)
     sex: Gender = Field(default=Gender.PREFER_NOT_TO_SAY)
     linkedin_profile: Optional[str] = Field(None, regex=r"^https?://(www\.)?linkedin\.com/.*$")
     cv_url: Optional[str] = None
@@ -221,12 +222,14 @@ class User(UserBase, table=True):
         """Calculate profile completion percentage"""
         required_fields = [
             'full_name', 'job_title', 'industry',
-            'years_of_experience', 'location', 'education',
-            'company', 'bio', 'visibility'
+            'location', 'education', 'skill' 
         ]
         optional_fields = [
             'email', 'phone', 'certifications',
-            'linkedin_profile', 'cv_url', 'topics'
+            'linkedin_profile', 'cv_url', 'topics',
+            'industry', 'years_of_experience', 'company',
+            'visibility', 'working_experiences',
+            'volunteering', 'bio'
         ]
 
         completed = 0

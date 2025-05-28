@@ -12,7 +12,7 @@ from enum import Enum
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy import and_, or_
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import Column, Enum as PgEnum, JSON, String
+from sqlalchemy import Column, Enum as PgEnum, JSON, String, Column, ARRAY
 from sqlalchemy.orm import Mapped, relationship
 from sqlmodel import SQLModel, Field, Relationship
 from pydantic import validator
@@ -80,6 +80,7 @@ class Post(SQLModel, table=True):
         default=PostEngagement().dict(),
         sa_column=Column(JSONB, nullable=False, default=lambda: PostEngagement().dict())
     )
+    media_urls: Optional[List[str]] = Field(default_factory=list, sa_column=Column(ARRAY(String), nullable=True))
     media_url: Optional[str] = None
     media_type: Optional[str] = Field(default="image", max_length=50)  # or "video"
 
@@ -200,6 +201,7 @@ class PostCreate(SQLModel):
     job_title: Optional[str] = None
     expires_at: Optional[datetime] = None
     media_url: Optional[str] = None
+    media_urls: Optional[List[str]] = Field(default_factory=list, sa_column=Column(ARRAY(String), nullable=True))
     media_type: Optional[str] = Field(default="image")  # or "video"
 
 
@@ -216,6 +218,7 @@ class PostUpdate(SQLModel):
     visibility: Optional[PostVisibility] = None
     is_promoted: Optional[bool] = None
     expires_at: Optional[datetime] = None
+    media_urls: Optional[List[str]] = Field(default_factory=list, sa_column=Column(ARRAY(String), nullable=True))
 
 class PostPublic(PostCreate):
     id: str

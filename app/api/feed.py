@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query,
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from sqlalchemy import select, or_, and_
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from datetime import datetime, timedelta
 from app.db.database import get_db
 from app.models.post import Post, PostType, PostStatus
@@ -54,6 +54,14 @@ class FeedResponse(BaseModel):
     main_posts: List[PostRead]
     fresh_posts: List[PostRead]
     next_cursor: Optional[str] = None
+    media_urls: Optional[List[str]] = None
+
+    @field_serializer('media_urls')
+    def serialize_media_urls(self, media_urls: Optional[List[str]], _info):
+        """Ensure consistent serialization of media URLs"""
+        if hasattr(self, 'media_url') and self.media_url:  # Handle CSV string case
+            return self.media_url.split(',')
+        return media_urls or []
 
 @router.get("/", response_model=FeedResponse)
 async def get_personalized_feed(
@@ -67,52 +75,43 @@ async def get_personalized_feed(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Personalized feed curated by:
+    Get a personalized feed of posts from:
     - Followed users
     - Followers
     - Connections
-    - Shared topics
-    - Industry relevance
-    Includes:
-    - Engagement scoring
-    - Fresh posts
-    - Enriched data (comments, reactions)
+    - Industry-relevant content
     """
-
-    logger.info(f"Fetching personalized feed for user_id={current_user.id}")
+    logger.info(f"Fetching feed for user_id={current_user.id}")
+    
     try:
+        # Setup filters
         cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
         exclude_ids = get_seen_posts_from_request(request)
 
-        # Parse cursor
+        # Parse cursor for pagination
         cursor_time, cursor_id = None, None
         if cursor:
             try:
                 cursor_time_str, cursor_id = cursor.split(",")
                 cursor_time = datetime.fromisoformat(cursor_time_str)
-                logger.info(f"Parsed cursor - time: {cursor_time}, id: {cursor_id}")
-            except ValueError:
-                logger.warning(f"Failed to parse cursor '{cursor}' - error: {str(e)}")
+            except ValueError as e:
                 raise CustomHTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid cursor format: {str(e)}. Expected 'timestamp,post_id'",
                     error_code=INVALID_CURSOR_FORMAT
                 )
 
-
-        # Get followed user IDs
+        # Fetch related user IDs
         followed_q = await db.execute(
             select(UserFollow.followed_id).where(UserFollow.follower_id == current_user.id)
         )
         followed_ids = {str(row[0]) for row in followed_q.all()}
 
-        # Get follower user IDs
         followers_q = await db.execute(
             select(UserFollow.follower_id).where(UserFollow.followed_id == current_user.id)
         )
         follower_ids = {str(row[0]) for row in followers_q.all()}
 
-        # Get connected user IDs
         conn_q = await db.execute(
             select(Connection).where(
                 Connection.status == ConnectionStatus.ACCEPTED,
@@ -123,20 +122,17 @@ async def get_personalized_feed(
             )
         )
         connections = conn_q.scalars().all()
-        connection_ids = set()
-        for conn in connections:
-            if conn.sender_id != current_user.id:
-                connection_ids.add(str(conn.sender_id))
-            if conn.receiver_id != current_user.id:
-                connection_ids.add(str(conn.receiver_id))
+        connection_ids = {
+            str(conn.sender_id if conn.sender_id != current_user.id else conn.receiver_id)
+            for conn in connections
+        }
 
-        # Combine all related user IDs
         related_user_ids = followed_ids | follower_ids | connection_ids
 
-        # Base query
+        # Build query
         stmt = (
             select(Post, User)
-            .join(User)
+            .join(User, Post.user_id == User.id)
             .where(
                 Post.deleted == False,
                 Post.status == PostStatus.PUBLISHED,
@@ -144,24 +140,21 @@ async def get_personalized_feed(
             )
         )
 
-        # Build OR conditions for user-related and content-related relevance
-        conditions = []
-
+        filters = []
         if post_type:
-            conditions.append(Post.post_type == post_type)
+            filters.append(Post.post_type == post_type)
 
         if related_user_ids:
-            conditions.append(Post.user_id.in_(related_user_ids))
+            filters.append(Post.user_id.in_(related_user_ids))
 
         if current_user.topics:
-            conditions.append(Post.engagement["tags"].contains(current_user.topics))
+            filters.append(Post.engagement["tags"].contains(current_user.topics))
 
         if current_user.industry:
-            conditions.append(Post.industry == current_user.industry)
+            filters.append(Post.industry == current_user.industry)
 
-        # Only apply OR if we have at least one filtering condition
-        if conditions:
-            stmt = stmt.where(or_(*conditions))
+        if filters:
+            stmt = stmt.where(or_(*filters))
 
         if cutoff_date:
             stmt = stmt.where(Post.created_at >= cutoff_date)
@@ -187,11 +180,12 @@ async def get_personalized_feed(
 
         posts = [row[0] for row in rows[:limit]]
         users = [row[1] for row in rows[:limit]]
+
         enriched_posts = await enrich_multiple_posts(
             db,
             posts,
             users,
-            current_user_id=str(current_user.id) if current_user else None
+            current_user_id=str(current_user.id)
         )
 
         next_cursor = None
@@ -201,19 +195,20 @@ async def get_personalized_feed(
 
         return FeedResponse(
             main_posts=enriched_posts,
-            fresh_posts=[],
+            fresh_posts=[],  # You can populate this based on separate logic if needed
             next_cursor=next_cursor
         )
 
     except CustomHTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in personalized feed for user {current_user.id}: {str(e)}")
+        logger.error(f"Unexpected error in feed for user_id={current_user.id}: {str(e)}")
         raise CustomHTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unexpected error in personalized feed",
+            detail="Unexpected error while fetching feed",
             error_code=FEED_ERROR
         )
+
 
 @router.get("/network", response_model=FeedResponse)
 async def get_network_feed(

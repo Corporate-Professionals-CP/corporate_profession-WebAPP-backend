@@ -620,23 +620,25 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
         )
 
     required_fields = {
-        'full_name': 15,
-        'email': 15,
+        'full_name': 10,
+        'email': 10,
         'industry': 10,
-        'years_of_experience': 10,
         'location': 10,
+        'working_experinece': 5,
+        'job_title': 10,
         'skills': 10,
         'education': 10,
-        'company': 10,
-        'bio': 10
     }
 
     optional_fields = {
-        'job_title': 5,
-        'phone': 5,
-        'certifications': 5,
+        'years_of_experience': 5,
+        'company': 2,
+        'certifications': 2,
         'linkedin_profile': 5,
-        'cv_url': 5
+        'cv_url': 5,
+        'company': 2,
+        'volunteering': 2,
+        'bio': 2
     }
 
     completion = {

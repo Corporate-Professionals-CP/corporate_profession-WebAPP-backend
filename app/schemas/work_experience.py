@@ -52,8 +52,11 @@ class WorkExperienceRead(WorkExperienceBase):
     id: str
     created_at: datetime
 
+    class Config:
+        from_attributes = True
+
 class WorkExperienceListResponse(BaseModel):
     data: List[WorkExperienceRead] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True

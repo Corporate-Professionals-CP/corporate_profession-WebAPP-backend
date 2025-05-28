@@ -30,7 +30,6 @@ from app.models.notification import Notification
 from app.crud.notification import create_notification
 from app.schemas.enums import NotificationType
 
-
 async def create_post(
     session: AsyncSession,
     post_data: PostCreate,
@@ -40,8 +39,32 @@ async def create_post(
     Optimized post creation with enhanced validation and error handling
     """
     try:
+        # Validate media URLs if provided
+        if post_data.media_urls:
+            for url in post_data.media_urls:
+                if not url.startswith("https://storage.googleapis.com/"):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid media URL format"
+                    )
+
+        # Determine media type
+        media_type = None
+        if post_data.media_urls:
+            if len(post_data.media_urls) > 1:
+                media_type = "multiple"
+            else:
+                url = post_data.media_urls[0]
+                media_type = "video" if any(ext in url for ext in [".mp4", ".mov"]) else "image"
+
         # Create dictionary of post data
-        post_dict = post_data.dict(exclude_unset=True, exclude={"tags", "skills"})
+        post_dict = post_data.dict(exclude_unset=True, exclude={"tags", "skills", "media_urls"})
+
+        # Add media fields
+        post_dict.update({
+            "media_url": ",".join(post_data.media_urls) if post_data.media_urls else None,
+            "media_type": media_type
+        })
 
         # Handle job post validations
         if post_data.post_type == PostType.JOB_POSTING:
@@ -69,7 +92,7 @@ async def create_post(
 
         session.add(db_post)
         await session.flush()
-        
+
         # Eager load relationships needed for response
         result = await session.execute(
             select(Post)
@@ -80,8 +103,15 @@ async def create_post(
             .where(Post.id == db_post.id)
         )
         db_post = result.scalar_one()
-        
+
         await session.commit()
+        
+        # Convert media_url to media_urls for response
+        if db_post.media_url:
+            db_post.media_urls = db_post.media_url.split(',')
+        else:
+            db_post.media_urls = []
+            
         return db_post
 
     except Exception as e:
@@ -90,7 +120,6 @@ async def create_post(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create post: {str(e)}"
         )
-
 
 async def _resolve_skills(session: AsyncSession, skill_names: List[str]) -> List[Skill]:
     """Get or create skills by name"""
@@ -152,8 +181,8 @@ async def update_post(
     current_user: User
 ) -> Post:
     """
-    Update post with ownership and validation checks
-    Admin privileges
+    Update post with ownership and validation checks.
+    Supports media updates. Admin privileges apply.
     """
     db_post = await get_post_with_user(session, post_id)
     post, author = db_post
@@ -165,9 +194,9 @@ async def update_post(
             detail="Not authorized to update this post"
         )
 
-    # Job post validation
-    if (post.post_type == PostType.JOB_POSTING and 
-        post_update.industry is None and 
+    # Validate job post industry
+    if (post.post_type == PostType.JOB_POSTING and
+        post_update.industry is None and
         post.industry is None and
         post.job_title is None):
         raise HTTPException(
@@ -175,7 +204,25 @@ async def update_post(
             detail="Job posts must maintain industry specification"
         )
 
-    update_data = post_update.dict(exclude_unset=True)
+    update_data = post_update.dict(exclude_unset=True, exclude={"media_urls"})
+
+    # Handle media updates
+    media_urls = post_update.media_urls
+    if media_urls is not None:
+        for url in media_urls:
+            if not url.startswith("https://storage.googleapis.com/"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid media URL format"
+                )
+        post.media_url = ",".join(media_urls) if media_urls else None
+        if len(media_urls) > 1:
+            post.media_type = "multiple"
+        elif len(media_urls) == 1:
+            post.media_type = "video" if any(ext in media_urls[0] for ext in [".mp4", ".mov"]) else "image"
+        else:
+            post.media_type = None
+
     for field, value in update_data.items():
         setattr(post, field, value)
 
@@ -185,6 +232,10 @@ async def update_post(
         session.add(post)
         await session.commit()
         await session.refresh(post)
+
+        # Set media_urls field for response
+        post.media_urls = post.media_url.split(',') if post.media_url else []
+
         return post
     except Exception as e:
         await session.rollback()
@@ -193,15 +244,17 @@ async def update_post(
             detail=f"Failed to update post: {str(e)}"
         )
 
-# crud.py (updated repost_post function)
 async def repost_post(
     session: AsyncSession,
     original_post_id: UUID,
     current_user: User,
-    quote_text: Optional[str] = None
+    quote_text: Optional[str] = None,
+    media_urls: Optional[List[str]] = None
 ) -> Post:
-    """Create a repost (or quote-repost) of an existing post"""
-    # Eager load the original post with its user
+    """
+    Create a repost (or quote-repost) of an existing post.
+    Users may optionally add media to the repost.
+    """
     result = await session.execute(
         select(Post)
         .options(selectinload(Post.user))
@@ -212,21 +265,19 @@ async def repost_post(
     if not original_post:
         raise HTTPException(status_code=404, detail="Original post not found")
 
-    # Get user identifier safely
+    # Format user identifier
     user_identifier = (
-        original_post.user.username 
+        original_post.user.username
         if hasattr(original_post.user, 'username') else
-        original_post.user.full_name 
+        original_post.user.full_name
         if hasattr(original_post.user, 'full_name') else
         getattr(original_post.user, 'email', 'a user').split('@')[0]
     )
 
-    # Build content with Twitter-style formatting
+    # Format content
     if quote_text:
         clean_quote = quote_text.strip()
         clean_original = original_post.content.strip()
-        
-        # New format: Quote first, then attribution, then original post
         content = (
             f"{clean_quote}\n\n"
             f"—— Reposted from @{user_identifier} ——\n\n"
@@ -237,7 +288,23 @@ async def repost_post(
         content = f"Reposted from @{user_identifier}:\n\n{original_post.content}"
         title = f"Repost: {original_post.title}" if original_post.title else "Repost"
 
-    # Create the repost
+    # Validate media and determine media_type as string
+    media_type = None
+    if media_urls:
+        for url in media_urls:
+            # url might be HttpUrl object, so convert to str if needed
+            str_url = str(url)
+            if not str_url.startswith("https://storage.googleapis.com/"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid media URL format"
+                )
+        if len(media_urls) > 1:
+            media_type = "multiple"
+        else:
+            first_url = str(media_urls[0]).lower()
+            media_type = "video" if any(ext in first_url for ext in [".mp4", ".mov"]) else "image"
+
     repost = Post(
         title=title,
         content=content,
@@ -247,10 +314,15 @@ async def repost_post(
         user_id=str(current_user.id),
         visibility=PostVisibility.PUBLIC,
         tags=original_post.tags.copy() if original_post.tags else [],
-        skills=original_post.skills.copy() if original_post.skills else []
+        skills=original_post.skills.copy() if original_post.skills else [],
+        media_url=",".join([str(u) for u in media_urls]) if media_urls else None,
+        media_type=media_type,
+        engagement=PostEngagement().dict(),
+        published_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
     )
 
-    # Update engagement safely
+    # Increment share count on original post engagement
     if hasattr(original_post, 'engagement') and isinstance(original_post.engagement, dict):
         original_post.engagement["share_count"] = original_post.engagement.get("share_count", 0) + 1
     else:
@@ -259,7 +331,13 @@ async def repost_post(
     session.add(repost)
     await session.commit()
     await session.refresh(repost)
+
+    # Add media_urls list for response convenience
+    repost.media_urls = repost.media_url.split(',') if repost.media_url else []
+
     return repost
+
+
 
 async def undo_repost_operation(
     session: AsyncSession,
@@ -503,6 +581,13 @@ async def get_feed_posts(
     ]
     main_posts = [p for p in posts if p not in fresh_posts][:limit]
 
+    # Attach media_urls (parsed from comma-separated media_url)
+    for post, user, _ in main_posts:
+        post.media_urls = post.media_url.split(',') if post.media_url else []
+
+    for post, user, _ in fresh_posts:
+        post.media_urls = post.media_url.split(',') if post.media_url else []
+
     # Generate cursor
     next_cursor = None
     if main_posts:
@@ -678,6 +763,10 @@ async def search_posts(
     user_objs = [u for _, u in posts]
 
     enriched_results = await enrich_multiple_posts(db, post_objs, user_objs)
+
+    # Add media_urls to each enriched result
+    for enriched_post, post in zip(enriched_results, post_objs):
+        enriched_post.media_urls = post.media_urls.split(",") if post.media_urls else []
 
     last_post = post_objs[-1]
     next_cursor = f"{last_post.created_at.isoformat()}_{last_post.id}" if len(post_objs) == limit else None

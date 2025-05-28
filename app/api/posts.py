@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.db.database import get_db
 from app.models.user import User
 from app.models.post import Post, PostType
-from app.schemas.post import PostCreate, PostRead, PostUpdate, PostSearch, PostSearchResponse
+from app.schemas.post import PostCreate, PostRead, PostUpdate, PostSearch, PostSearchResponse, RepostRequest
 from app.crud.post import (
     create_post,
     get_post,
@@ -56,7 +56,7 @@ async def create_new_post(
 ):
     """
     Create a new post in the system.
-    Any user can create posts
+    Any user can create posts, with optional media attachments
     
     Post Types:
     - job: Job opportunities (must include industry tag)
@@ -250,19 +250,19 @@ async def update_existing_post(
 @router.post("/{post_id}/repost", response_model=PostRead)
 async def repost_content(
     post_id: UUID,
-    quote: Optional[str] = Body(None, embed=True),
+    payload: RepostRequest = Body(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Create a repost or quote-repost"""
-    # First get the original post with its owner loaded
+    # Get the original post with its owner
     original_post_result = await db.execute(
         select(Post)
         .options(selectinload(Post.user))
         .where(Post.id == str(post_id))
     )
     original_post = original_post_result.scalar_one_or_none()
-    
+
     if not original_post:
         raise CustomHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -271,9 +271,15 @@ async def repost_content(
         )
 
     # Create the repost
-    repost = await repost_post(db, post_id, current_user, quote_text=quote)
+    repost = await repost_post(
+        session=db,
+        original_post_id=post_id,
+        current_user=current_user,
+        quote_text=payload.quote,
+        media_urls=payload.media_urls
+    )
 
-    # Only send notification if not reposting own content
+    # Send notification if not self-repost
     if str(original_post.user_id) != str(current_user.id):
         await create_notification(
             db,
@@ -282,17 +288,17 @@ async def repost_content(
                 actor_id=current_user.id,
                 type=NotificationType.POST_REPOST,
                 message=f"{current_user.full_name} reposted your post: '{original_post.title[:30]}...'",
-                reference_id=str(repost.id)  # Store repost ID for linking
+                reference_id=str(repost.id)
             )
         )
 
-    # Get the user who created the repost (current_user)
+    # Load user for enrichment
     user_result = await db.execute(select(User).where(User.id == repost.user_id))
     repost_user = user_result.scalar_one()
 
-    # Use your existing enrich function
     enriched_posts = await enrich_multiple_posts(db, [repost], [repost_user])
     return enriched_posts[0]
+
 
 @router.delete("/reposts/{repost_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def undo_repost(

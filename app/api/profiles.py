@@ -15,7 +15,7 @@ import os
 from datetime import timedelta
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.user import UserRead, UserPublic, UserUpdate, UserProfileCompletion
+from app.schemas.user import UserRead, UserPublic, UserUpdate, UserProfileCompletion, UserProfileResponse
 from app.core.security import get_current_active_user, get_current_active_admin
 from app.crud.user import (
     get_user_by_id,
@@ -26,6 +26,9 @@ from app.crud.user import (
     upload_user_profile_image,
     delete_user_profile_image
 )
+from app.crud.work_experience import get_user_work_experiences
+from app.crud.education import get_user_education
+from app.crud.contact import get_user_contacts
 from google.cloud.exceptions import GoogleCloudError
 from urllib.parse import urlparse
 from app.core.config import settings
@@ -54,29 +57,29 @@ router = APIRouter(prefix="/profiles", tags=["profiles"])
 
 @router.get("/me", response_model=UserRead)
 async def get_own_profile(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
     Get current user's full profile (always visible to owner)
     """
-    return current_user
+    profile_completion = await get_profile_completion(db, current_user.id)
 
-@router.get("/{user_id}", response_model=Union[UserRead, UserPublic])
+    user_data = UserRead.from_orm(current_user)
+    user_data.profile_completion = profile_completion.completion_percentage
+    user_data.missing_fields = profile_completion.missing_fields
+    user_data.sections = profile_completion.sections
+
+    return user_data
+
+@router.get("/{user_id}", response_model=Union[UserProfileResponse, UserPublic])
 async def get_profile(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """
-    Get user profile with privacy control
-    - Full profile for owner/admins
-    - Public view respects hide_profile
-    - Recruiter tag visibility
-    - Minimal info when profile hidden (only name + recruiter tag)
-    """
-    # Admin or owner can see full profile regardless
     is_owner_or_admin = str(current_user.id) == str(user_id) or current_user.is_admin
-    
+
     user = await get_user_by_id(db, user_id)
     if not user:
         raise CustomHTTPException(
@@ -85,16 +88,34 @@ async def get_profile(
             error_code=USER_NOT_FOUND,
         )
 
-    # Return full profile if owner/admin or profile not hidden
     if is_owner_or_admin or not user.hide_profile:
-        return user
-    
-    # Return minimal public profile
+        work_experience = await get_user_work_experiences(db, str(user.id))
+        education = await get_user_education(db, str(user.id))
+        contact = await get_user_contacts(db, str(user.id))
+
+        return UserProfileResponse(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            bio=user.bio,
+            recruiter_tag=user.recruiter_tag,
+            is_active=user.is_active,
+            is_admin=user.is_admin,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            work_experience=work_experience,
+            education=education,
+            contact=contact
+        )
+
     return UserPublic(
         id=user.id,
         full_name=user.full_name,
+        status=user.status,
         recruiter_tag=user.recruiter_tag
     )
+
+
 
 @router.get("/{user_id}/completion", response_model=UserProfileCompletion)
 async def get_profile_completion_status(

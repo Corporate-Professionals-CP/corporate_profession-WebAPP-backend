@@ -42,3 +42,11 @@ class SignupResponse(BaseModel):
     refresh_token: str
     user_id: str
     user: UserRead
+
+class AuthResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_at: datetime
+    user: UserRead
+

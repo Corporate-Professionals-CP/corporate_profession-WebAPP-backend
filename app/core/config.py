@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     GCS_BASE_PATH: str = "users/{user_id}/cvs"
     GCS_CREDENTIALS_JSON_B64: Optional[str] = None
     MAX_CV_SIZE: int = 5 * 1024 * 1024  # 5MB
+    GCS_BASE_URL: str = "https://storage.googleapis.com"
+
+    @property
+    def GCS_PUBLIC_BASE_URL(self):
+        return f"{self.GCS_BASE_URL}/{self.GCS_BUCKET_NAME}"
 
     GCS_PROFILE_IMAGE_BASE_PATH: str = "users/{user_id}/profile_images"
     MAX_PROFILE_IMAGE_SIZE: int = 5 * 1024 * 1024

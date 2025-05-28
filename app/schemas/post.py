@@ -7,10 +7,10 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, HttpUrl
 from app.schemas.user import UserPublic
 from app.schemas.enums import Industry, PostType, ExperienceLevel, JobTitle, PostVisibility
-from pydantic import validator
+from pydantic import validator, field_validator
 
 
 class PostBase(BaseModel):
@@ -25,7 +25,10 @@ class PostBase(BaseModel):
     tags: Optional [List[str]] = Field(default_factory=list)
     skills: Optional [List[str]] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
-    media_url: Optional[str] = None
+    media_urls: Optional[List[str]] = Field(
+        None,
+        description="Array of media URLs from /media/batch upload"
+    )
     media_type: Optional[str] = Field(default="image")
 
     class Config:
@@ -52,6 +55,10 @@ class PostUpdate(BaseModel):
     job_title: Optional[str] = None
     skills: Optional[List[str]] = None
     tags: Optional[List[str]] = None
+    media_urls: Optional[List[str]] = Field(
+        None,
+        description="Array of media URLs from /media/batch upload"
+    )
     visibility: Optional[PostVisibility] = None
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
@@ -89,6 +96,7 @@ class PostRead(PostBase):
     total_reposts: int = 0
     total_reactions: int = 0
     is_bookmarked: bool = False
+    media_urls: Optional[List[str]] = None
     reactions_breakdown: ReactionBreakdown | None = None
     is_repost: bool = False
     original_post_id: Optional[UUID] = None
@@ -106,6 +114,13 @@ class PostRead(PostBase):
         if 'user' in values and values['user']:
             return values['user'].full_name
         return v
+
+    @field_serializer('media_urls')
+    def serialize_media_urls(self, media_urls: Optional[List[str]], _info):
+        """Ensure consistent serialization of media URLs"""
+        if hasattr(self, 'media_url') and self.media_url:  # Handle CSV string case
+            return self.media_url.split(',')
+        return media_urls or []
 
     class Config:
         from_attributes = True
@@ -132,6 +147,13 @@ class PostSearch(BaseModel):
     skills: Optional[List[str]] = None
     limit: int = 100 
     cursor: Optional[str] = Field(None, description="Pagination cursor")
+    media_urls: Optional[List[str]] = []
+
+    @field_serializer("media_urls")
+    def serialize_media_urls(self, media_urls: Optional[List[str]], _info):
+        return media_urls or []
+
+
 
     class Config:
         json_schema_extra = {
@@ -150,4 +172,23 @@ class PostSearch(BaseModel):
 class PostSearchResponse(BaseModel):
     results: List[PostRead]
     next_cursor: Optional[str] = None
+    media_urls: Optional[List[str]] = None
+    media_type: Optional[str] = None
 
+class RepostRequest(BaseModel):
+    quote: Optional[str] = None
+    media_urls: Optional[List[HttpUrl]] = None
+
+    @field_serializer('media_urls')
+    def serialize_media_urls(self, media_urls: Optional[List[str]], _info):
+        """Ensure consistent serialization of media URLs"""
+        if hasattr(self, 'media_url') and self.media_url:  # Handle CSV string case
+            return self.media_url.split(',')
+        return media_urls or []
+
+    @field_validator("media_urls", mode="before")
+    @classmethod
+    def convert_httpurls_to_str(cls, v):
+        if isinstance(v, list):
+            return [str(url) if isinstance(url, HttpUrl) else url for url in v]
+        return v
