@@ -69,15 +69,15 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    work_experience: List[WorkExperienceRead] = []
     company: Optional[str] = None
-    contact: List[ContactRead] = []
     job_title: Optional[str] = None
     bio: Optional[str] = None
+    work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)
+    education: Optional[List[EducationRead]] = Field(default_factory=list)
+    contact: Optional[List[ContactRead]] = Field(default_factory=list)
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
     location: Optional[Location] = None
-    education: List[EducationRead] = []
     age: Optional[int] = None
     sex: Optional[Gender] = None
     status: Optional[str] = None
@@ -100,9 +100,9 @@ class UserPublic(UserBase):
     status: Optional[str]
     sex: Optional[Gender]
     industry: Optional[Industry]
-    work_experience: List[WorkExperienceRead] = []
-    education: List[EducationRead] = []
-    contact: List[ContactRead] = []
+    work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)
+    education: Optional[List[EducationRead]] = Field(default_factory=list)
+    contact: Optional[List[ContactRead]] = Field(default_factory=list)
     years_of_experience: Optional[ExperienceLevel]
     location: Optional[Location]
     skills: List[SkillRead] = []
@@ -182,9 +182,9 @@ class UserProfileResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    work_experience: List[WorkExperienceRead] = []
-    education: List[EducationRead] = []
-    contact: List[ContactRead] = []
+    work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)
+    education: Optional[List[EducationRead]] = Field(default_factory=list)
+    contact: Optional[List[ContactRead]] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

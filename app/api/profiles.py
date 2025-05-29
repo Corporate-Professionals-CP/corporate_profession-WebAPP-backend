@@ -89,9 +89,9 @@ async def get_profile(
         )
 
     if is_owner_or_admin or not user.hide_profile:
-        work_experience = await get_user_work_experiences(db, str(user.id))
-        education = await get_user_education(db, str(user.id))
-        contact = await get_user_contacts(db, str(user.id))
+        work_experience = await get_user_work_experiences(db, str(user.id)) or []
+        education = await get_user_education(db, str(user.id)) or []
+        contact = await get_user_contacts(db, str(user.id)) or []
 
         return UserProfileResponse(
             id=user.id,
