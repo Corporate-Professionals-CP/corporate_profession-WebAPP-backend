@@ -410,6 +410,7 @@ async def verify_email(
             error_code=FAILED_TO_VERIFY_EMAIL
         )
 
+
 @router.post("/resend-verification", status_code=status.HTTP_200_OK)
 async def resend_verification(
     email: str = Body(..., embed=True),
@@ -433,24 +434,50 @@ async def resend_verification(
         additional_claims={"type": "verify"}
     )
 
-    otp, _ = await send_verification_email(
-        email=user.email,
-        name=user.full_name,
-        token=verification_token
-    )
+    # Generate and send OTP
+    otp = await generate_otp()
+    try:
+        await send_verification_email(
+            email=user.email,
+            name=user.full_name,
+            token=verification_token
+        )
+    except Exception as e:
+        logger.error(f"Failed to send verification email: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to send verification email"
+        )
 
-    # Key Fix: Store OTP exactly as verify-email expects it
-    user.profile_preferences = user.profile_preferences or {}
-    user.profile_preferences["email_verification_otp"] = str(otp)  # Explicit string conversion
-    user.profile_preferences["email_verification_token"] = verification_token
-    user.profile_preferences["email_verification_expires"] = (
-        datetime.utcnow() + timedelta(minutes=30)
-    ).isoformat()  # ISO format string
+    # Initialize profile_preferences if None
+    if user.profile_preferences is None:
+        user.profile_preferences = {}
 
-    db.add(user)
-    await db.commit()
+    # Update verification data
+    user.profile_preferences.update({
+        "email_verification_otp": str(otp),  # Explicit string conversion
+        "email_verification_token": verification_token,
+        "email_verification_expires": (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+    })
+
+    # Explicitly mark as modified for SQLAlchemy
+    flag_modified(user, "profile_preferences")
+
+    try:
+        await db.commit()
+        await db.refresh(user)
+        logger.info(f"Verification OTP successfully stored for user {user.email}")
+        logger.debug(f"Stored OTP: {user.profile_preferences.get('email_verification_otp')}")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to store verification OTP: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process verification request"
+        )
 
     return {"message": "Verification email resent"}
+
 @router.post("/refresh-token", response_model=Token)
 async def refresh_token(
     refresh_token: str = Body(...),
