@@ -52,10 +52,13 @@ from app.core.error_codes import (
     FAILED_TO_VERIFY_EMAIL,
     OTP_EXPIRED,
     PASSWORD_LENGTH,
-    PASSWORD_MUST_NOT_THE_SAME
+    PASSWORD_MUST_NOT_THE_SAME,
+    NO_OTP_FOUND,
+    INVALID_OTP_FORMAT
+
 )
 
-
+from sqlalchemy.orm.attributes import flag_modified
 from app.core.exceptions import CustomHTTPException
 
 logger = logging.getLogger(__name__)
@@ -478,6 +481,8 @@ async def refresh_token(
     except JWTError:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
+
+
 @router.post("/request-password-reset", status_code=status.HTTP_200_OK)
 async def request_password_reset(
     email: str = Body(..., embed=True),
@@ -485,23 +490,38 @@ async def request_password_reset(
 ):
     user = await get_user_by_email(db, email)
     if not user:
-        # Don't reveal if user exists for security
         return {"message": "If an account exists with this email, a reset OTP has been sent"}
 
-    # Generate and send OTP
+    # Generate OTP
     otp = await send_password_reset_email(email=user.email, name=user.full_name)
 
-    # Store OTP in user's profile_preferences
-    user.profile_preferences = user.profile_preferences or {}
-    user.profile_preferences["password_reset_otp"] = str(otp)
-    user.profile_preferences["password_reset_expires"] = (
-        datetime.utcnow() + timedelta(minutes=30)
-    ).isoformat()
+    # Initialize profile_preferences if None
+    if user.profile_preferences is None:
+        user.profile_preferences = {}
 
-    db.add(user)
-    await db.commit()
+    # Update OTP information
+    user.profile_preferences.update({
+        "password_reset_otp": str(otp),
+        "password_reset_expires": (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+    })
+
+    # Explicitly mark as modified for SQLAlchemy
+    flag_modified(user, "profile_preferences")
+
+    try:
+        await db.commit()
+        await db.refresh(user)  # Ensure we have the latest data
+        logger.info(f"OTP successfully stored for user {user.email}")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to store OTP: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process password reset request"
+        )
 
     return {"message": "Password reset OTP sent"}
+
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
 async def reset_password(
@@ -516,39 +536,59 @@ async def reset_password(
             detail="User not found"
         )
 
-    # Check OTP
-    prefs = user.profile_preferences or {}
-    stored_otp = prefs.get("password_reset_otp")
-    expires_at_str = prefs.get("password_reset_expires")
+    # Verify we have profile_preferences
+    if not user.profile_preferences:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No OTP found for this user. Please request a new one."
+        )
 
-    if not stored_otp or str(reset.otp) != str(stored_otp):
+    # Get OTP data
+    stored_otp = user.profile_preferences.get("password_reset_otp")
+    expires_at_str = user.profile_preferences.get("password_reset_expires")
+
+    # Debug logging
+    logger.info(f"Stored OTP: {stored_otp}, Input OTP: {reset.otp}")
+    logger.info(f"Full profile_preferences: {user.profile_preferences}")
+
+    # Verify OTP exists and matches
+    if not stored_otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No OTP found for this user. Please request a new one."
+        )
+
+    if str(stored_otp).strip() != str(reset.otp).strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid OTP"
         )
 
-    # Check expiration
-    if not expires_at_str or datetime.utcnow() > datetime.fromisoformat(expires_at_str):
+    # Verify expiration
+    try:
+        expires_at = datetime.fromisoformat(expires_at_str) if expires_at_str else None
+        if not expires_at or datetime.utcnow() > expires_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP has expired. Please request a new one."
+            )
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OTP has expired",
-            error_code=OTP_EXPIRED
+            detail="Invalid OTP expiration format"
         )
 
-    # Validate new password
+    # Password validation
     if len(reset.new_password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 8 characters",
-            error_code=PASSWORD_LENGTH
+            detail="Password must be at least 8 characters"
         )
 
-    # Check password reuse
     if verify_password(reset.new_password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password cannot be the same as current password",
-            error_code=PASSWORD_MUST_NOT_THE_SAME
+            detail="New password cannot be the same as current password"
         )
 
     # Update password
@@ -556,11 +596,22 @@ async def reset_password(
     user.updated_at = datetime.utcnow()
 
     # Clear OTP data
-    if "password_reset_otp" in user.profile_preferences:
-        del user.profile_preferences["password_reset_otp"]
-        del user.profile_preferences["password_reset_expires"]
+    user.profile_preferences.pop("password_reset_otp", None)
+    user.profile_preferences.pop("password_reset_expires", None)
 
-    db.add(user)
-    await db.commit()
+    # Mark as modified
+    flag_modified(user, "profile_preferences")
+
+    try:
+        await db.commit()
+        await db.refresh(user)
+        logger.info(f"Password successfully reset for user {user.email}")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to reset password: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset password"
+        )
 
     return {"message": "Password updated successfully"}
