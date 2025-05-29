@@ -14,7 +14,7 @@ class Contact(SQLModel, table=True):
     )
     platform_name: Optional[str] = Field(default=None)
     username: Optional[str] = Field(default=None)
-    url: str = Field()
+    url: str = Field(default=None) 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     user: Mapped["User"] = Relationship(back_populates="contacts")

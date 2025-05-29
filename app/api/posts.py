@@ -121,6 +121,11 @@ async def search_posts_endpoint(
             cursor_id=cursor_id
         )
 
+        # Double-check media_urls are set (extra safety)
+        for post in response.results:
+            if not hasattr(post, 'media_urls'):
+                post.media_urls = []
+
         return response
 
     except CustomHTTPException:

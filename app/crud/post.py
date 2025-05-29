@@ -580,14 +580,7 @@ async def get_feed_posts(
         if p[0].created_at > datetime.utcnow() - timedelta(minutes=5)
     ]
     main_posts = [p for p in posts if p not in fresh_posts][:limit]
-
-    # Attach media_urls (parsed from comma-separated media_url)
-    for post, user, _ in main_posts:
-        post.media_urls = post.media_url.split(',') if post.media_url else []
-
-    for post, user, _ in fresh_posts:
-        post.media_urls = post.media_url.split(',') if post.media_url else []
-
+    
     # Generate cursor
     next_cursor = None
     if main_posts:
@@ -765,8 +758,12 @@ async def search_posts(
     enriched_results = await enrich_multiple_posts(db, post_objs, user_objs)
 
     # Add media_urls to each enriched result
-    for enriched_post, post in zip(enriched_results, post_objs):
-        enriched_post.media_urls = post.media_urls.split(",") if post.media_urls else []
+    for enriched_post, raw_post in zip(enriched_results, post_objs):
+        if hasattr(raw_post, 'media_url') and raw_post.media_url:
+            enriched_post.media_urls = raw_post.media_url.split(',')
+        else:
+            enriched_post.media_urls = []
+
 
     last_post = post_objs[-1]
     next_cursor = f"{last_post.created_at.isoformat()}_{last_post.id}" if len(post_objs) == limit else None

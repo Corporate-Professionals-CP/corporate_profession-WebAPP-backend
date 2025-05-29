@@ -6,7 +6,7 @@ from app.core.security import get_current_active_user
 from app.models.user import User
 from app.schemas.contact import ContactCreate, ContactRead, ContactUpdate
 from app.crud.contact import create_contact, get_user_contacts, update_contact, delete_contact
-from app.core.exceptions import CustomHTTPException  # Import CustomHTTPException
+from app.core.exceptions import CustomHTTPException
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 

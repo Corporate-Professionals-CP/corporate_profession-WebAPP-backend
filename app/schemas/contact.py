@@ -34,5 +34,11 @@ class ContactRead(BaseModel):
     url: HttpUrl
     created_at: datetime
 
+    @validator('url', pre=True)
+    def convert_httpurl_to_str(cls, v):
+        if isinstance(v, HttpUrl):
+            return str(v)
+        return v
+
     class Config:
         from_attributes = True

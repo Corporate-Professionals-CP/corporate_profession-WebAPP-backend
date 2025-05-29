@@ -21,6 +21,7 @@ from app.utils.feed_cookies import (
     track_seen_posts,
     get_seen_posts_from_request
 )
+from uuid import UUID
 from app.core.exceptions import CustomHTTPException
 from app.core.error_codes import (
     FEED_ERROR,
@@ -54,161 +55,68 @@ class FeedResponse(BaseModel):
     main_posts: List[PostRead]
     fresh_posts: List[PostRead]
     next_cursor: Optional[str] = None
-    media_urls: Optional[List[str]] = None
-
-    @field_serializer('media_urls')
-    def serialize_media_urls(self, media_urls: Optional[List[str]], _info):
-        """Ensure consistent serialization of media URLs"""
-        if hasattr(self, 'media_url') and self.media_url:  # Handle CSV string case
-            return self.media_url.split(',')
-        return media_urls or []
 
 @router.get("/", response_model=FeedResponse)
 async def get_personalized_feed(
     request: Request,
     response: Response,
-    post_type: Optional[PostType] = Query(None, description="Filter by post type"),
+    post_type: Optional[PostType] = Query(None),
     recent_days: Optional[int] = Query(None, ge=1, le=365),
-    cursor: Optional[str] = Query(None, description="Cursor format: 'timestamp,post_id'"),
+    cursor: Optional[str] = Query(None),
     limit: int = Query(50, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Get a personalized feed of posts from:
-    - Followed users
-    - Followers
-    - Connections
-    - Industry-relevant content
-    """
-    logger.info(f"Fetching feed for user_id={current_user.id}")
-    
     try:
-        # Setup filters
-        cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
-        exclude_ids = get_seen_posts_from_request(request)
-
-        # Parse cursor for pagination
-        cursor_time, cursor_id = None, None
-        if cursor:
-            try:
-                cursor_time_str, cursor_id = cursor.split(",")
-                cursor_time = datetime.fromisoformat(cursor_time_str)
-            except ValueError as e:
-                raise CustomHTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid cursor format: {str(e)}. Expected 'timestamp,post_id'",
-                    error_code=INVALID_CURSOR_FORMAT
-                )
-
-        # Fetch related user IDs
-        followed_q = await db.execute(
-            select(UserFollow.followed_id).where(UserFollow.follower_id == current_user.id)
-        )
-        followed_ids = {str(row[0]) for row in followed_q.all()}
-
-        followers_q = await db.execute(
-            select(UserFollow.follower_id).where(UserFollow.followed_id == current_user.id)
-        )
-        follower_ids = {str(row[0]) for row in followers_q.all()}
-
-        conn_q = await db.execute(
-            select(Connection).where(
-                Connection.status == ConnectionStatus.ACCEPTED,
-                or_(
-                    Connection.sender_id == current_user.id,
-                    Connection.receiver_id == current_user.id
-                )
-            )
-        )
-        connections = conn_q.scalars().all()
-        connection_ids = {
-            str(conn.sender_id if conn.sender_id != current_user.id else conn.receiver_id)
-            for conn in connections
-        }
-
-        related_user_ids = followed_ids | follower_ids | connection_ids
-
-        # Build query
-        stmt = (
-            select(Post, User)
-            .join(User, Post.user_id == User.id)
-            .where(
-                Post.deleted == False,
-                Post.status == PostStatus.PUBLISHED,
-                Post.is_active == True
-            )
-        )
-
-        filters = []
-        if post_type:
-            filters.append(Post.post_type == post_type)
-
-        if related_user_ids:
-            filters.append(Post.user_id.in_(related_user_ids))
-
-        if current_user.topics:
-            filters.append(Post.engagement["tags"].contains(current_user.topics))
-
-        if current_user.industry:
-            filters.append(Post.industry == current_user.industry)
-
-        if filters:
-            stmt = stmt.where(or_(*filters))
-
-        if cutoff_date:
-            stmt = stmt.where(Post.created_at >= cutoff_date)
-
-        if exclude_ids:
-            stmt = stmt.where(Post.id.not_in(exclude_ids))
-
-        if cursor_time and cursor_id:
-            stmt = stmt.where(
-                or_(
-                    Post.created_at < cursor_time,
-                    and_(Post.created_at == cursor_time, Post.id < cursor_id)
-                )
-            )
-
-        stmt = stmt.order_by(Post.created_at.desc(), Post.id.desc()).limit(limit + 1)
-
-        result = await db.execute(stmt)
-        rows = result.all()
-
-        seen_ids = [str(row[0].id) for row in rows]
-        track_seen_posts(response, seen_ids)
-
-        posts = [row[0] for row in rows[:limit]]
-        users = [row[1] for row in rows[:limit]]
-
-        enriched_posts = await enrich_multiple_posts(
+        # Get raw posts
+        main_posts, fresh_posts, next_cursor = await get_feed_posts(
             db,
-            posts,
-            users,
-            current_user_id=str(current_user.id)
+            current_user,
+            post_type=post_type,
+            cursor=cursor,
+            cutoff_date=datetime.utcnow() - timedelta(days=recent_days) if recent_days else None,
+            limit=limit,
+            exclude_ids=get_seen_posts_from_request(request)
         )
 
-        next_cursor = None
-        if len(rows) > limit:
-            last_post = rows[limit - 1][0]
-            next_cursor = f"{last_post.created_at.isoformat()},{last_post.id}"
+        # Convert media URLs before enrichment
+        def convert_media_urls(posts):
+            for post, user, _ in posts:
+                post.media_urls = post.media_url.split(',') if post.media_url else []
+                yield post, user
+
+        # Prepare posts for enrichment
+        main_for_enrich = list(convert_media_urls(main_posts))
+        fresh_for_enrich = list(convert_media_urls(fresh_posts))
+
+        # Enrich posts (unaware of media URLs)
+        enriched_main = await enrich_multiple_posts(
+            db,
+            [p[0] for p in main_for_enrich],
+            [p[1] for p in main_for_enrich],
+            str(current_user.id)
+        )
+        enriched_fresh = await enrich_multiple_posts(
+            db,
+            [p[0] for p in fresh_for_enrich],
+            [p[1] for p in fresh_for_enrich],
+            str(current_user.id)
+        )
 
         return FeedResponse(
-            main_posts=enriched_posts,
-            fresh_posts=[],  # You can populate this based on separate logic if needed
+            main_posts=enriched_main,
+            fresh_posts=enriched_fresh,
             next_cursor=next_cursor
         )
 
-    except CustomHTTPException:
+    except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in feed for user_id={current_user.id}: {str(e)}")
-        raise CustomHTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unexpected error while fetching feed",
-            error_code=FEED_ERROR
+        logger.error(f"Feed error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch feed"
         )
-
 
 @router.get("/network", response_model=FeedResponse)
 async def get_network_feed(
@@ -226,17 +134,23 @@ async def get_network_feed(
     """
     try:
         cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
-        exclude_ids = get_seen_posts_from_request(request)
+        
+        # Safely get seen posts from cookies
+        try:
+            exclude_ids = get_seen_posts_from_request(request)
+        except Exception as e:
+            logger.warning(f"Failed to get seen posts from cookies: {str(e)}")
+            exclude_ids = []
 
         cursor_time, cursor_id = None, None
         if cursor:
             try:
                 cursor_time_str, cursor_id = cursor.split(",")
                 cursor_time = datetime.fromisoformat(cursor_time_str)
-            except ValueError:
+            except ValueError as e:
                 raise CustomHTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid cursor format: {str(e)}. Expected 'timestamp,post_id'",
+                    detail="Invalid cursor format. Expected 'timestamp,post_id'",
                     error_code=INVALID_CURSOR_FORMAT
                 )
 
@@ -297,17 +211,48 @@ async def get_network_feed(
         result = await db.execute(stmt)
         rows = result.all()
 
-        seen_ids = [str(row[0].id) for row in rows]
-        track_seen_posts(response, seen_ids)
+        # Safely track seen posts
+        try:
+            seen_ids = [str(row[0].id) for row in rows]
+            track_seen_posts(response, seen_ids)
+        except Exception as e:
+            logger.error(f"Failed to track seen posts: {str(e)}")
 
         posts = [row[0] for row in rows[:limit]]
         users = [row[1] for row in rows[:limit]]
+
+        # Convert media URLs before enrichment 
+        for post in posts:
+            if post.media_url:  # Explicit check
+                post.media_urls = post.media_url.split(',')
+            else:
+                post.media_urls = []  # Explicit empty list
+
+        # Enrich posts while preserving media_urls
+        enriched_posts = []
+        for post, user in zip(posts, users):
+            # Create PostRead object directly with all fields
+            post_dict = {
+                **post.__dict__,
+                'user': user,
+                'media_urls': post.media_urls  # Preserve our converted URLs
+            }
+
+        # Convert media URLs before enrichment - same as personalized feed
+        for post in posts:
+            post.media_urls = post.media_url.split(',') if post.media_url else []
+
+        # Enrich posts
         enriched_posts = await enrich_multiple_posts(
             db,
             posts,
             users,
-            current_user_id=str(current_user.id) if current_user else None
+            current_user_id=user_id
         )
+
+        if enriched_posts and len(enriched_posts) > 0:
+            enriched_posts[0].media_urls = post.media_urls
+            enriched_posts.append(enriched_posts[0])
 
         next_cursor = None
         if len(rows) > limit:
@@ -321,8 +266,9 @@ async def get_network_feed(
         )
 
     except Exception as e:
-            raise CustomHTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error retrieving network feed posts",
-                error_code=NETWORK_FEED_ERROR
-            )
+        logger.error(f"Network feed error: {str(e)}", exc_info=True)
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving network feed posts",
+            error_code=NETWORK_FEED_ERROR
+        )
