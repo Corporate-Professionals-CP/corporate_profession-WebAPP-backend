@@ -38,23 +38,6 @@ class ExperienceLevel(str, Enum):
     def list(cls):
         return [item.value for item in cls]
 
-class EducationLevel(str, Enum):
-    """
-    Highest education attainment.
-    Reference: Education
-    """
-    HIGH_SCHOOL = "High School"
-    ASSOCIATE = "Associate Degree"
-    BACHELORS = "Bachelor's Degree"
-    MASTERS = "Master's Degree"
-    DOCTORATE = "PhD/Doctorate"
-    PROFESSIONAL = "Professional Certification"
-    OTHER = "Other"
-
-    @classmethod
-    def list(cls):
-        return [item.value for item in cls]
-
 class Gender(str, Enum):
     """
     Gender identity options with inclusive default.

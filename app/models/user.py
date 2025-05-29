@@ -18,7 +18,6 @@ from app.schemas.enums import (
     ExperienceLevel,
     Gender,
     ProfileVisibility,
-    EducationLevel,
     Location,
     JobTitle
 )
@@ -52,7 +51,7 @@ class UserBase(SQLModel):
     industry: Optional[Industry] = Field(default=None)
     years_of_experience: Optional[ExperienceLevel] = Field(default=None)
     location: Optional[Location] = Field(default=None, min_length=2, max_length=100)
-    education: Optional[EducationLevel] = Field(default=None)
+
     visibility: Optional[ProfileVisibility] = Field(
         default=ProfileVisibility.PUBLIC,
         description="Profile visibility preference"
@@ -77,7 +76,6 @@ class User(UserBase, table=True):
     industry: Optional[Industry] = Field(default=None, nullable=True)
     years_of_experience: Optional[ExperienceLevel] = Field(default=None, nullable=True)
     location: Optional[Location] = Field(default=None, nullable=True)
-    education: Optional[EducationLevel] = Field(default=None, nullable=True)
 
     contacts: Mapped[List["Contact"]] = Relationship(
         back_populates="user",
