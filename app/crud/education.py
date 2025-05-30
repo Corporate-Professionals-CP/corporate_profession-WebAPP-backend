@@ -17,12 +17,19 @@ async def create_education(session: AsyncSession, user: User, data: EducationCre
         raise CustomHTTPException(status_code=500, detail=f"Failed to create education entry: {str(e)}")
 
 
+# Get all education records for a user
 async def get_user_education(session: AsyncSession, user_id: UUID):
     try:
-        result = await session.execute(select(Education).where(Education.user_id == str(user_id)))
-        return result.scalars().all()
+        result = await session.execute(
+            select(Education).where(Education.user_id == str(user_id))
+        )
+        education = result.scalars().all()
+        return education  # returns [] if none found
     except Exception as e:
-        raise CustomHTTPException(status_code=500, detail=f"Failed to fetch education records: {str(e)}")
+        raise CustomHTTPException(
+            status_code=500,
+            detail=f"Failed to fetch education records: {str(e)}"
+        )
 
 
 async def update_education(session: AsyncSession, edu_id: UUID, data: EducationUpdate) -> Education:

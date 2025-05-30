@@ -24,7 +24,8 @@ from app.crud.user import (
     delete_user_cv,
     get_profile_completion,
     upload_user_profile_image,
-    delete_user_profile_image
+    delete_user_profile_image,
+    generate_avatar_fallback
 )
 from app.crud.work_experience import get_user_work_experiences
 from app.crud.education import get_user_education
@@ -48,7 +49,8 @@ from app.core.error_codes import (
     PROFILE_UPDATE_FAILED,
     PROFILE_COMPLETION_FORBIDDEN,
     REQUIRED_FIELD_MISSING,
-    ADMIN_PRIVILEGE_REQUIRED
+    ADMIN_PRIVILEGE_REQUIRED,
+    FILE_UPLOAD_ERROR
 )
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,8 @@ async def get_profile(
         education = await get_user_education(db, str(user.id)) or []
         contact = await get_user_contacts(db, str(user.id)) or []
 
+        initials, color = generate_avatar_fallback(user)
+
         return UserProfileResponse(
             id=user.id,
             email=user.email,
@@ -105,7 +109,10 @@ async def get_profile(
             updated_at=user.updated_at,
             work_experience=work_experience,
             education=education,
-            contact=contact
+            contact=contact,
+            profile_image_url=user.profile_image_url,
+            avatar_text=initials,
+            avatar_color=color
         )
 
     return UserPublic(

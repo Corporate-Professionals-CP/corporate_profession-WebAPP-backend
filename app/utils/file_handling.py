@@ -93,7 +93,17 @@ async def save_uploaded_file(file: UploadFile, user_id: str, file_type: str = "c
         blob = bucket.blob(blob_path)
         blob.upload_from_file(file.file, content_type=mime_type)
 
-        return f"https://storage.googleapis.com/{settings.GCS_BUCKET_NAME}/{blob_path}"
+        # Make public for persistent access
+        if file_type in {"profile", "post_media"}:
+            public_url = f"https://storage.googleapis.com/{settings.GCS_BUCKET_NAME}/{blob_path}"
+            return public_url
+
+        # Signed URL for CVs
+        return blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(minutes=5),
+            method="GET"
+        )
 
 
     except HTTPException:
@@ -102,25 +112,43 @@ async def save_uploaded_file(file: UploadFile, user_id: str, file_type: str = "c
         logger.error(f"File upload failed: {str(e)}")
         raise HTTPException(500, "Failed to process file upload")
 
+
+
 async def delete_user_file(url: str) -> bool:
     """Delete file using full URL"""
     try:
-        # Extract bucket-relative path from URL
-        if not url.startswith(settings.GCS_PUBLIC_BASE_URL):
-            logger.error(f"Invalid URL format for deletion: {url}")
+        parsed = urlparse(url)
+        if not parsed.netloc or not parsed.path:
+            logger.error(f"Invalid URL format: {url}")
             return False
-            
-        blob_path = url.replace(f"{settings.GCS_PUBLIC_BASE_URL}/", "")
+
+        # Support multiple public formats
+        if settings.GCS_BUCKET_NAME not in parsed.netloc and settings.GCS_BUCKET_NAME not in parsed.path:
+            logger.error(f"URL does not match expected bucket: {url}")
+            return False
+
+        # Extract blob path
+        if parsed.netloc == "storage.googleapis.com":
+            # Format: https://storage.googleapis.com/{bucket}/{blob_path}
+            parts = parsed.path.lstrip("/").split("/", 1)
+            if len(parts) != 2:
+                logger.error(f"Malformed GCS public URL: {url}")
+                return False
+            blob_path = parts[1]
+        else:
+            # Custom domain format: https://<your-domain>/<blob_path>
+            blob_path = parsed.path.lstrip("/")
+
         blob = bucket.blob(blob_path)
-        
+
         if not blob.exists():
             logger.warning(f"File not found: {blob_path}")
             return False
-            
+
         blob.delete()
         logger.info(f"Deleted: {blob_path}")
         return True
-        
+
     except Exception as e:
         logger.error(f"Deletion failed: {str(e)}")
         return False

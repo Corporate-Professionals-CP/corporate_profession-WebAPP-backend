@@ -29,9 +29,7 @@ async def get_user_contacts(session: AsyncSession, user_id: str):
     try:
         result = await session.execute(select(Contact).where(Contact.user_id == user_id))
         contacts = result.scalars().all()
-        if not contacts:
-            raise CustomHTTPException(status_code=404, detail="No contacts found for this user.")
-        return contacts
+        return contacts  # returns [] if none found
     except Exception as e:
         raise CustomHTTPException(status_code=500, detail=f"Error retrieving contacts: {str(e)}")
 
