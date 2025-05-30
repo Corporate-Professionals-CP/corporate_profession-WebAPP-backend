@@ -175,12 +175,16 @@ class UserProfileResponse(BaseModel):
     email: str
     full_name: Optional[str]
     bio: Optional[str]
+    status: Optional[str]
     recruiter_tag: bool 
     is_active: bool
     is_admin: bool
     created_at: datetime
     updated_at: datetime
     profile_image_url: Optional[str] = None
+    industry: Optional[Industry]
+    visibility: Optional[ProfileVisibility]
+    years_of_experience: Optional[ExperienceLevel]
     work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)
     education: Optional[List[EducationRead]] = Field(default_factory=list)
     contact: Optional[List[ContactRead]] = Field(default_factory=list)

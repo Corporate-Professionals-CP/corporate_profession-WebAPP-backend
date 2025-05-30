@@ -109,6 +109,10 @@ async def get_profile(
             updated_at=user.updated_at,
             work_experience=work_experience,
             education=education,
+            years_of_experience=user.years_of_experience,
+            industry=user.industry,
+            status=user.status,
+            visibility=user.visibility,
             contact=contact,
             profile_image_url=user.profile_image_url,
             avatar_text=initials,
@@ -119,7 +123,12 @@ async def get_profile(
         id=user.id,
         full_name=user.full_name,
         status=user.status,
-        recruiter_tag=user.recruiter_tag
+        recruiter_tag=user.recruiter_tag,
+        visibility=user.visibility,
+        industry=user.industry,
+        location=user.location,
+        years_of_experience=user.years_of_experience
+
     )
 
 
