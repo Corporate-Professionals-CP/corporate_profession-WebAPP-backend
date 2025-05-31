@@ -192,6 +192,7 @@ class UserProfileResponse(BaseModel):
     updated_at: datetime
     profile_image_url: Optional[str]
     industry: Optional[Industry]
+    location: Optional[Location]
     visibility: Optional[ProfileVisibility]
     years_of_experience: Optional[ExperienceLevel]
     work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)

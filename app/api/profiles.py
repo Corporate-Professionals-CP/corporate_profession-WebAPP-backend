@@ -115,6 +115,7 @@ async def get_profile(
             status=user.status,
             visibility=user.visibility,
             contact=contact,
+            location=user.location,
             profile_image_url=user.profile_image_url,
             avatar_text=initials,
             avatar_color=color
