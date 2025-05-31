@@ -9,7 +9,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.notification import Notification
 from app.schemas.enums import NotificationType
-from app.schemas.connection import  ConnectionUser, ConnectionCreate, ConnectionUpdate, ConnectionRead
+from app.schemas.connection import  ConnectionUser, ConnectionCreate, ConnectionUpdate, ConnectionRead, ConnectionStatsResponse, PotentialConnectionsResponse
 from app.crud.connection import (
     send_connection_request,
     respond_to_connection,
@@ -134,16 +134,37 @@ async def pending_requests(
         logger.error("Unexpected error in pending_requests:", exc_info=True)
         raise CustomHTTPException(500, "Failed to fetch pending connection requests")
 
-@router.get("/my-connections", response_model=list[ConnectionRead])
+@router.get("/my-connections", response_model=ConnectionStatsResponse)
 async def my_connections(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    Get user's connections with counts
+    Returns:
+        {
+            "total_connections": 120,
+            "pending_requests": 9,
+            "connections": [...]  # List of ConnectionRead objects
+        }
+    """
     try:
+        # Get accepted connections
         connections = await get_my_connections(db, str(current_user.id))
-        return [format_connection(conn) for conn in connections]
-    except Exception:
+        formatted_connections = [format_connection(conn) for conn in connections]
+        
+        # Get pending requests count
+        pending_requests = await get_my_requests(db, str(current_user.id))
+        
+        return {
+            "total_connections": len(connections),
+            "pending_requests": len(pending_requests),
+            "connections": formatted_connections
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch connections: {str(e)}", exc_info=True)
         raise CustomHTTPException(500, "Failed to fetch your connections")
+
 
 
 @router.get("/sent-pending", response_model=list[ConnectionRead])
@@ -186,16 +207,21 @@ async def get_sent_pending_requests(
         raise CustomHTTPException(500, "Failed to fetch sent pending connection requests")
 
 
-@router.get("/suggestions", response_model=list[ConnectionUser])
+@router.get("/suggestions", response_model=PotentialConnectionsResponse)
 async def get_connection_suggestions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     limit: int = 10
 ):
-    """Get suggested connections for the current user"""
+    """Get suggested connections with connection statistics"""
     try:
         logger.info(f"Starting connection suggestions for user {current_user.id}, limit {limit}")
 
+        # Get connection statistics
+        connections = await get_my_connections(db, str(current_user.id))
+        pending_requests = await get_my_requests(db, str(current_user.id))
+
+        # Get suggested users
         users = await get_potential_connections(db, str(current_user.id), limit)
         logger.debug(f"Retrieved {len(users)} potential users from database")
 
@@ -225,8 +251,12 @@ async def get_connection_suggestions(
                 logger.error(f"Failed to process user {user.id}: {str(e)}", exc_info=True)
                 continue
 
-        logger.info(f"Returning {len(suggestions)} connection suggestions")
-        return suggestions
+        logger.info(f"Returning {len(suggestions)} connection suggestions with stats")
+        return {
+            "total_connections": len(connections),
+            "pending_requests": len(pending_requests),
+            "suggestions": suggestions
+        }
 
     except CustomHTTPException:
         logger.error("Custom HTTP error in suggestions endpoint", exc_info=True)

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -43,3 +43,12 @@ class ConnectionRead(BaseModel):
 class ConnectionUpdate(BaseModel):
     status: ConnectionStatus
 
+class ConnectionStatsResponse(BaseModel):
+    total_connections: int
+    pending_requests: int
+    connections: List[ConnectionRead]
+
+class PotentialConnectionsResponse(BaseModel):
+    total_connections: int
+    pending_requests: int
+    suggestions: List[ConnectionUser]
