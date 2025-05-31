@@ -128,6 +128,14 @@ class UserRead(UserPublic):
     cv_url: Optional[str] = None
     updated_at: datetime
 
+class DownloadCVResponse(BaseModel):
+    download_url: str
+    expires_at: datetime
+
+class ProfileImageResponse(BaseModel):
+    image_url: str
+    expires_at: datetime
+
 class UserDirectoryItem(BaseModel):
     id: str
     full_name: Optional[str]

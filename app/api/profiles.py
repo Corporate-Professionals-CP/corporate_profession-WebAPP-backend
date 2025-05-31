@@ -12,10 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Union, Optional
 import shutil
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.user import UserRead, UserPublic, UserUpdate, UserProfileCompletion, UserProfileResponse
+from app.schemas.user import UserRead, UserPublic, UserUpdate, UserProfileCompletion, UserProfileResponse, DownloadCVResponse, ProfileImageResponse
 from app.core.security import get_current_active_user, get_current_active_admin
 from app.crud.user import (
     get_user_by_id,
@@ -303,11 +303,19 @@ async def delete_cv(
             error_code=CV_DELETE_FAILED,
         )
 
-@router.get("/{user_id}/cv")
-async def download_cv(
+@router.get("/{user_id}/cv", response_model=DownloadCVResponse)
+async def get_cv_download_url(
     user_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
+    """
+    Get a signed URL for downloading a user's CV
+    Returns:
+        {
+            "download_url": "https://signed-gcs-url.com/path/to/cv.pdf",
+            "expires_at": "2023-01-01T00:05:00Z"  # When the URL expires
+        }
+    """
     user = await get_user_by_id(db, user_id)
     if not user or not user.cv_url:
         raise CustomHTTPException(
@@ -337,16 +345,24 @@ async def download_cv(
         blob = bucket.blob(blob_path)
 
         if not blob.exists():
-            raise CustomHTTPException(status.HTTP_404_NOT_FOUND, "CV file not found in storage")
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="CV file not found in storage",
+                error_code=CV_NOT_FOUND
+            )
 
         # Generate fresh signed URL with 5 minute expiration
-        new_url = blob.generate_signed_url(
+        expiration = timedelta(minutes=5)
+        download_url = blob.generate_signed_url(
             version="v4",
-            expiration=timedelta(minutes=5),
+            expiration=expiration,
             method="GET"
         )
 
-        return RedirectResponse(url=new_url)
+        return {
+            "download_url": download_url,
+            "expires_at": (datetime.utcnow() + expiration).isoformat()
+        }
 
     except ValueError as e:
         logger.error(f"URL validation error: {str(e)}")
@@ -431,13 +447,18 @@ async def delete_profile_image(
             error_code=FILE_UPLOAD_ERROR
         )
 
-@router.get("/{user_id}/profile-image")
-async def get_profile_image(
+@router.get("/{user_id}/profile-image", response_model=ProfileImageResponse)
+async def get_profile_image_url(
     user_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Get signed URL for profile image
+    Returns:
+        {
+            "image_url": "https://signed-gcs-url.com/path/to/image.jpg",
+            "expires_at": "2023-01-01T00:05:00Z"  # When the URL expires
+        }
     """
     user = await get_user_by_id(db, user_id)
     if not user or not user.profile_image_url:
@@ -450,26 +471,22 @@ async def get_profile_image(
     try:
         # Extract bucket name and blob path from URL
         parsed_url = urlparse(user.profile_image_url)
-        
-        # Handle both formats:
-        # 1. https://storage.googleapis.com/BUCKET_NAME/path/to/file
-        # 2. https://BUCKET_NAME.storage.googleapis.com/path/to/file
+
+        # Handle both URL formats
         if parsed_url.netloc == 'storage.googleapis.com':
-            # Format 1: path is /BUCKET_NAME/path/to/file
             path_parts = parsed_url.path.lstrip('/').split('/')
             if len(path_parts) < 2:
                 raise ValueError("Invalid GCS URL structure")
             blob_path = '/'.join(path_parts[1:])
         else:
-            # Format 2: netloc is BUCKET_NAME.storage.googleapis.com
             bucket_name = parsed_url.netloc.split('.')[0]
             blob_path = parsed_url.path.lstrip('/')
-        
-        # Remove any URL query parameters
+
+        # Remove query parameters
         blob_path = blob_path.split('?')[0]
-        
-        logger.info(f"Attempting to access blob at path: {blob_path}")  # Debug logging
-        
+
+        logger.info(f"Attempting to access blob at path: {blob_path}")
+
         blob = bucket.blob(blob_path)
         if not blob.exists():
             logger.error(f"Blob not found at path: {blob_path}")
@@ -478,14 +495,19 @@ async def get_profile_image(
                 detail="Profile image not found in storage"
             )
 
+        # Generate signed URL with 5 minute expiration
+        expiration = timedelta(minutes=5)
         signed_url = blob.generate_signed_url(
             version="v4",
-            expiration=timedelta(minutes=5),
+            expiration=expiration,
             method="GET"
         )
-        
-        logger.info(f"Generated signed URL: {signed_url}")  # Debug logging
-        return RedirectResponse(url=signed_url)
+
+        logger.info(f"Generated signed URL: {signed_url}")
+        return {
+            "image_url": signed_url,
+            "expires_at": (datetime.utcnow() + expiration).isoformat()
+        }
 
     except ValueError as e:
         logger.error(f"URL parsing error: {str(e)}")
