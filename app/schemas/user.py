@@ -176,7 +176,7 @@ class UserProfileResponse(BaseModel):
     full_name: Optional[str]
     bio: Optional[str]
     status: Optional[str]
-    job_title: Optional[str]
+    job_title: Optional[str] = None
     recruiter_tag: bool 
     is_active: bool
     is_admin: bool

@@ -102,6 +102,7 @@ async def get_profile(
             email=user.email,
             full_name=user.full_name,
             bio=user.bio,
+            job_title=user.job_title,
             recruiter_tag=user.recruiter_tag,
             is_active=user.is_active,
             is_admin=user.is_admin,
