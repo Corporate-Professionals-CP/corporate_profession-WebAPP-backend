@@ -176,12 +176,13 @@ class UserProfileResponse(BaseModel):
     full_name: Optional[str]
     bio: Optional[str]
     status: Optional[str]
+    job_title: Optional[str]
     recruiter_tag: bool 
     is_active: bool
     is_admin: bool
     created_at: datetime
     updated_at: datetime
-    profile_image_url: Optional[str] = None
+    profile_image_url: Optional[str]
     industry: Optional[Industry]
     visibility: Optional[ProfileVisibility]
     years_of_experience: Optional[ExperienceLevel]
