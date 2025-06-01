@@ -21,7 +21,7 @@ from app.models.user import User
 from app.models.skill import Skill
 from app.models.follow import UserFollow
 from app.models.connection import Connection
-from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead, ReactionBreakdown, PostSearchResponse
+from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead, ReactionBreakdown, PostSearchResponse, UserReactionStatus
 from app.schemas.enums import Industry, PostType, JobTitle, PostVisibility
 from app.core.security import get_current_active_user
 from sqlalchemy.orm import selectinload, Mapped
@@ -861,15 +861,15 @@ async def get_multi(
     return result.scalars().all()
 
 async def enrich_multiple_posts(
-    db: AsyncSession, 
-    posts: List[Post], 
+    db: AsyncSession,
+    posts: List[Post],
     users: List[User],
     current_user_id: Optional[str] = None
 ) -> List[PostRead]:
     post_ids = [str(post.id) for post in posts]
 
-    # Reactions (bulk fetch - existing)
-    reaction_data = await db.execute(
+    # Bulk fetch reaction counts
+    reaction_counts = await db.execute(
         select(
             PostReaction.post_id,
             PostReaction.type,
@@ -878,52 +878,79 @@ async def enrich_multiple_posts(
         .group_by(PostReaction.post_id, PostReaction.type)
     )
     reaction_map = {}
-    for pid, rtype, count in reaction_data.all():
+    for pid, rtype, count in reaction_counts.all():
         reaction_map.setdefault(pid, {})[rtype] = count
 
-    # Comments (bulk fetch - existing)
+    # Bulk fetch user's reactions if authenticated
+    user_reactions_map = {}
+    if current_user_id:
+        user_reactions = await db.execute(
+            select(PostReaction.post_id, PostReaction.type)
+            .where(
+                PostReaction.post_id.in_(post_ids),
+                PostReaction.user_id == current_user_id
+            )
+        )
+        for pid, rtype in user_reactions.all():
+            user_reactions_map.setdefault(pid, set()).add(rtype)
+
+    # Comments (existing)
     comment_data = await db.execute(
-        select(
-            PostComment.post_id,
-            func.count(PostComment.id))
+        select(PostComment.post_id, func.count(PostComment.id))
         .where(PostComment.post_id.in_(post_ids))
         .group_by(PostComment.post_id)
     )
     comment_map = {pid: count for pid, count in comment_data.all()}
 
-    # Bookmark status (optimized bulk fetch)
+    # Bookmarks (existing)
     bookmark_map = {}
-    if current_user_id:  # Only check if we have a user
+    if current_user_id:
         bookmark_data = await db.execute(
-            select(
-                Bookmark.post_id,
-                func.count(Bookmark.id))  # Count per post
+            select(Bookmark.post_id, func.count(Bookmark.id))
             .where(
                 Bookmark.post_id.in_(post_ids),
                 Bookmark.user_id == current_user_id
             )
             .group_by(Bookmark.post_id)
         )
-        # Create map of {post_id: bookmark_count}
         bookmark_map = {str(pid): count for pid, count in bookmark_data.all()}
 
     # Assemble enriched posts
     enriched = []
     for post, user in zip(posts, users):
         post_id_str = str(post.id)
+        
+        # Build reactions breakdown with user status
+        reactions_breakdown = ReactionBreakdown()
+        total_reactions = 0
+        
+        for rtype in ReactionType:
+            count = reaction_map.get(post_id_str, {}).get(rtype, 0)
+            has_reacted = rtype in user_reactions_map.get(post_id_str, set())
+            
+            # Set the reaction status
+            setattr(reactions_breakdown, rtype, UserReactionStatus(
+                count=count,
+                has_reacted=has_reacted
+            ))
+            
+            total_reactions += count
+
         enriched_data = {
             **post.__dict__,
             "user": user,
             "total_comments": comment_map.get(post_id_str, 0),
-            "total_reactions": sum(reaction_map.get(post_id_str, {}).values()),
-            "is_bookmarked": bookmark_map.get(post_id_str, 0) > 0,  # True if bookmarked
-            "reactions_breakdown": {
-                r: reaction_map.get(post_id_str, {}).get(r, 0)
-                for r in ReactionType.__members__.keys()
-            },
+            "total_reactions": total_reactions,
+            "is_bookmarked": bookmark_map.get(post_id_str, 0) > 0,
+            "reactions_breakdown": reactions_breakdown,
+            "has_reacted": any(
+                getattr(reactions_breakdown, rtype).has_reacted
+                for rtype in ReactionType
+            ),
             "is_active": post.is_active,
-            "bookmark_count": bookmark_map.get(post_id_str, 0)  # Total bookmark count
+            "bookmark_count": bookmark_map.get(post_id_str, 0)
         }
+        
         enriched.append(PostRead(**enriched_data))
 
     return enriched
@@ -959,3 +986,25 @@ async def increment_post_engagement(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update engagement: {str(e)}"
         )
+
+async def get_reactions_breakdown(
+    db: AsyncSession,
+    post_id: UUID,
+    current_user_id: Optional[UUID] = None
+) -> ReactionBreakdown:
+    # Get all reactions for this post
+    reactions = await get_reactions_for_post(db, post_id)
+
+    breakdown = ReactionBreakdown()
+
+    # Count reactions and check if current user reacted
+    for reaction in reactions:
+        # Update count
+        reaction_type = reaction.type.value  # e.g., "like", "love"
+        getattr(breakdown, reaction_type).count += 1
+
+        # Check if current user reacted
+        if current_user_id and reaction.user_id == current_user_id:
+            getattr(breakdown, reaction_type).has_reacted = True
+
+    return breakdown

@@ -63,12 +63,16 @@ class PostUpdate(BaseModel):
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
 
+class UserReactionStatus(BaseModel):
+    count: int = 0
+    has_reacted: bool = False
+
 class ReactionBreakdown(BaseModel):
-    like: int = 0
-    love: int = 0
-    insightful: int = 0
-    funny: int = 0
-    congratulations: int = 0
+    like: UserReactionStatus = Field(default_factory=lambda: UserReactionStatus())
+    love: UserReactionStatus = Field(default_factory=lambda: UserReactionStatus())
+    insightful: UserReactionStatus = Field(default_factory=lambda: UserReactionStatus())
+    funny: UserReactionStatus = Field(default_factory=lambda: UserReactionStatus())
+    congratulations: UserReactionStatus = Field(default_factory=lambda: UserReactionStatus())
 
 class OriginalPostUser(BaseModel):
     id: UUID
@@ -97,7 +101,8 @@ class PostRead(PostBase):
     total_reactions: int = 0
     is_bookmarked: bool = False
     media_urls: Optional[List[str]] = None
-    reactions_breakdown: ReactionBreakdown | None = None
+    has_reacted: bool = False
+    reactions_breakdown: ReactionBreakdown = Field(default_factory=ReactionBreakdown)
     is_repost: bool = False
     original_post_id: Optional[UUID] = None
     original_post_info: Optional[OriginalPostInfo] = None
