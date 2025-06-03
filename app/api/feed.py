@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, case, or_, and_, func, desc, cast, Float, type_coerce
 from pydantic import BaseModel, field_serializer
 from datetime import datetime, timedelta
 from app.db.database import get_db
@@ -68,8 +68,8 @@ async def get_personalized_feed(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        # Get raw posts
-        main_posts, fresh_posts, next_cursor = await get_feed_posts(
+        # Get prioritized posts
+        prioritized_posts, _, next_cursor = await get_feed_posts(
             db,
             current_user,
             post_type=post_type,
@@ -79,36 +79,24 @@ async def get_personalized_feed(
             exclude_ids=get_seen_posts_from_request(request)
         )
 
-        # Convert media URLs before enrichment
-        def convert_media_urls(posts):
-            for post, user, _ in posts:
-                post.media_urls = post.media_url.split(',') if post.media_url else []
-                yield post, user
+        # Convert media URLs and enrich
+        posts_for_enrich = []
+        for post, user, _ in prioritized_posts:
+            post.media_urls = post.media_url.split(',') if post.media_url else []
+            posts_for_enrich.append((post, user))
 
-        # Prepare posts for enrichment
-        main_for_enrich = list(convert_media_urls(main_posts))
-        fresh_for_enrich = list(convert_media_urls(fresh_posts))
-
-        # Enrich posts (unaware of media URLs)
-        enriched_main = await enrich_multiple_posts(
+        enriched_posts = await enrich_multiple_posts(
             db,
-            [p[0] for p in main_for_enrich],
-            [p[1] for p in main_for_enrich],
-            str(current_user.id)
-        )
-        enriched_fresh = await enrich_multiple_posts(
-            db,
-            [p[0] for p in fresh_for_enrich],
-            [p[1] for p in fresh_for_enrich],
+            [p[0] for p in posts_for_enrich],
+            [p[1] for p in posts_for_enrich],
             str(current_user.id)
         )
 
         return FeedResponse(
-            main_posts=enriched_main,
-            fresh_posts=enriched_fresh,
+            main_posts=enriched_posts,
+            fresh_posts=[],  # Now handled in main query
             next_cursor=next_cursor
         )
-
     except HTTPException:
         raise
     except Exception as e:
@@ -129,19 +117,23 @@ async def get_network_feed(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Get posts only from followed users and accepted network connections.
-    """
+    """Get posts from followed users and connections with recency prioritization"""
     try:
         cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
-        
-        # Safely get seen posts from cookies
+        user_id = str(current_user.id)
+
+        # Time thresholds for prioritization
+        very_recent_threshold = datetime.utcnow() - timedelta(minutes=15)
+        recent_threshold = datetime.utcnow() - timedelta(hours=6)
+
+        # Get seen posts from cookies
         try:
             exclude_ids = get_seen_posts_from_request(request)
         except Exception as e:
-            logger.warning(f"Failed to get seen posts from cookies: {str(e)}")
+            logger.warning(f"Failed to get seen posts: {str(e)}")
             exclude_ids = []
 
+        # Cursor handling
         cursor_time, cursor_id = None, None
         if cursor:
             try:
@@ -150,56 +142,88 @@ async def get_network_feed(
             except ValueError as e:
                 raise CustomHTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid cursor format. Expected 'timestamp,post_id'",
+                    detail="Invalid cursor format",
                     error_code=INVALID_CURSOR_FORMAT
                 )
 
-        user_id = str(current_user.id)
-
-        # Get followed user IDs
+        # Get network user IDs (followed + connected)
         follow_stmt = select(UserFollow.followed_id).where(UserFollow.follower_id == user_id)
         follow_result = await db.execute(follow_stmt)
         followed_user_ids = set(follow_result.scalars().all())
 
-        # Get connected user IDs (accepted connections)
         connections = await get_my_connections(db, user_id)
         connected_user_ids = set()
         for conn in connections:
-            if conn.sender_id != user_id:
-                connected_user_ids.add(conn.sender_id)
-            elif conn.receiver_id != user_id:
-                connected_user_ids.add(conn.receiver_id)
+            other_user = conn.sender_id if conn.sender_id != user_id else conn.receiver_id
+            connected_user_ids.add(other_user)
 
-        # Combine both sets of user IDs
         allowed_user_ids = followed_user_ids.union(connected_user_ids)
-
-        # If no followed or connected users, return empty feed
         if not allowed_user_ids:
             return FeedResponse(main_posts=[], fresh_posts=[], next_cursor=None)
 
-        # Base query: posts by allowed users only (excluding self)
-        stmt = (
-            select(Post, User)
-            .join(User, Post.user_id == User.id)
-            .where(
-                Post.deleted == False,
-                Post.status == PostStatus.PUBLISHED,
-                Post.is_active == True,
-                Post.user_id.in_(allowed_user_ids),
-                Post.user_id != user_id
+        # Engagement score calculation
+        engagement_score = (
+            func.coalesce(Post.engagement["view_count"].astext.cast(Float), 0) * 0.4 +
+            func.coalesce(Post.engagement["bookmark_count"].astext.cast(Float), 0) * 0.6
+        ).label("engagement_score")
+
+        # Priority score with recency boost
+        priority_score = case(
+            # Tier 1: Very recent posts
+            (
+                Post.created_at > very_recent_threshold,
+                10000  # Highest priority
+            ),
+            # Tier 2: Recent posts
+            (
+                Post.created_at > recent_threshold,
+                5000 + engagement_score
+            ),
+            else_=engagement_score
+        ).label("priority_score")
+
+        # Base query conditions
+        conditions = [
+            Post.deleted == False,
+            Post.status == PostStatus.PUBLISHED,
+            Post.is_active == True,
+            Post.user_id.in_(allowed_user_ids),
+            Post.user_id != user_id,
+            or_(
+                Post.expires_at.is_(None),
+                Post.expires_at > datetime.utcnow()
             )
-        )
+        ]
 
         if post_type:
-            stmt = stmt.where(Post.post_type == post_type)
+            conditions.append(Post.post_type == post_type)
         if cutoff_date:
-            stmt = stmt.where(Post.created_at >= cutoff_date)
+            conditions.append(Post.created_at >= cutoff_date)
         if exclude_ids:
-            stmt = stmt.where(Post.id.not_in(exclude_ids))
-        if cursor_time and cursor_id:
-            stmt = stmt.where(
+            conditions.append(
                 or_(
-                    Post.created_at < cursor_time,
+                    Post.id.not_in(exclude_ids),
+                    Post.created_at > very_recent_threshold
+                )
+            )
+
+        # Build and execute query
+        query = (
+            select(Post, User, priority_score)
+            .join(User)
+            .where(and_(*conditions))
+            .order_by(
+                desc("priority_score"),
+                desc(Post.created_at),
+                desc(Post.id)
+            )
+            .limit(limit + 1)
+        )
+
+        if cursor_time and cursor_id:
+            query = query.where(
+                or_(
+                    Post.created_at > cursor_time,
                     and_(
                         Post.created_at == cursor_time,
                         Post.id < cursor_id
@@ -207,57 +231,34 @@ async def get_network_feed(
                 )
             )
 
-        stmt = stmt.order_by(Post.created_at.desc(), Post.id.desc()).limit(limit + 1)
-        result = await db.execute(stmt)
+        result = await db.execute(query)
         rows = result.all()
 
-        # Safely track seen posts
-        try:
-            seen_ids = [str(row[0].id) for row in rows]
-            track_seen_posts(response, seen_ids)
-        except Exception as e:
-            logger.error(f"Failed to track seen posts: {str(e)}")
-
+        # Process results
         posts = [row[0] for row in rows[:limit]]
         users = [row[1] for row in rows[:limit]]
 
-        # Convert media URLs before enrichment 
-        for post in posts:
-            if post.media_url:  # Explicit check
-                post.media_urls = post.media_url.split(',')
-            else:
-                post.media_urls = []  # Explicit empty list
-
-        # Enrich posts while preserving media_urls
-        enriched_posts = []
-        for post, user in zip(posts, users):
-            # Create PostRead object directly with all fields
-            post_dict = {
-                **post.__dict__,
-                'user': user,
-                'media_urls': post.media_urls  # Preserve our converted URLs
-            }
-
-        # Convert media URLs before enrichment - same as personalized feed
+        # Convert media URLs
         for post in posts:
             post.media_urls = post.media_url.split(',') if post.media_url else []
 
         # Enrich posts
         enriched_posts = await enrich_multiple_posts(
-            db,
-            posts,
-            users,
-            current_user_id=user_id
+            db, posts, users, current_user_id=user_id
         )
 
-        if enriched_posts and len(enriched_posts) > 0:
-            enriched_posts[0].media_urls = post.media_urls
-            enriched_posts.append(enriched_posts[0])
-
+        # Generate cursor
         next_cursor = None
         if len(rows) > limit:
             last_post = rows[limit - 1][0]
             next_cursor = f"{last_post.created_at.isoformat()},{last_post.id}"
+
+        # Track seen posts
+        try:
+            seen_ids = [str(row[0].id) for row in rows[:limit]]
+            track_seen_posts(response, seen_ids)
+        except Exception as e:
+            logger.error(f"Failed to track seen posts: {str(e)}")
 
         return FeedResponse(
             main_posts=enriched_posts,

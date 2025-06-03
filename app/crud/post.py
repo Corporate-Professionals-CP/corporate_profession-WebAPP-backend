@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple, Union
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, desc, cast, JSON, Float, type_coerce, delete
+from sqlalchemy import select, case, and_, or_, func, desc, cast, JSON, Float, type_coerce, delete
 
 from fastapi import HTTPException, status
 from app.models.post import Post, PostStatus, PostEngagement, PostPublic
@@ -459,7 +459,6 @@ async def get_filtered_posts(
     )
     return result.scalars().all()
 
-
 async def get_feed_posts(
     session: AsyncSession,
     current_user: User,
@@ -470,8 +469,8 @@ async def get_feed_posts(
     limit: int = 50,
     exclude_ids: Optional[List[UUID]] = None
 ) -> Tuple[List[Tuple[Post, User]], Optional[str]]:
-    """Enhanced feed algorithm with engagement scoring and fresh posts"""
-    # Cursor parsing and base query setup
+    """Enhanced feed algorithm with immediate visibility for new posts"""
+    # Cursor parsing
     cursor_time, cursor_id = None, None
     if cursor:
         try:
@@ -483,111 +482,102 @@ async def get_feed_posts(
                 detail="Invalid cursor format"
             )
 
-    # Calculate engagement score
-    engagement_score = (
-        (Post.engagement["view_count"].astext.cast(Float) * 0.4) +
-        (Post.engagement["bookmark_count"].astext.cast(Float) * 0.6)
-    ).label("engagement_score")
+    # Time thresholds for post prioritization
+    very_recent_threshold = datetime.utcnow() - timedelta(minutes=15)
+    recent_threshold = datetime.utcnow() - timedelta(hours=6)
 
-    # Base query with scoring
-    query = (
-        select(
-            Post,
-            User,
-            engagement_score
-        )
-        .join(User)
-        .distinct(Post.id)
-        .where(Post.status == PostStatus.PUBLISHED)
-        .where(Post.is_active == True)
-        .where(Post.deleted == False)
-        .where(or_(
-            Post.expires_at.is_(None),
-            Post.expires_at > datetime.utcnow()
-        ))
-        .where(
-            (Post.post_type == post_type) if post_type
-            else True
-        )
-        .where(
-            (Post.created_at >= cutoff_date) if cutoff_date
-            else True
-        )
-    )
-
-    # Exclusion of already seen posts
-    if exclude_ids:
-        query = query.where(Post.id.not_in(exclude_ids))
-
-    # Followed users condition
+    # Get followed users first
     followed_users = await session.execute(
         select(UserFollow.followed_id)
         .where(UserFollow.follower_id == str(current_user.id))
     )
     followed_ids = [str(u[0]) for u in followed_users.all()]
 
-    # Relevance conditions with priority
-    relevance_conditions = [
-        # Highest priority: Followed users
-        Post.user_id.in_(followed_ids),
-        
-        # Medium priority: Industry match
-        and_(
-            Post.industry == current_user.industry,
-            Post.visibility.in_(["public", "industry"])
-        ),
-        
-        # Skill-based matches
-        Post.skills.any(Skill.id.in_([s.id for s in current_user.skills]))
-    ]
+    # Engagement score calculation with NULL protection
+    engagement_score = (
+        func.coalesce(Post.engagement["view_count"].astext.cast(Float), 0) * 0.4 +
+        func.coalesce(Post.engagement["bookmark_count"].astext.cast(Float), 0) * 0.6
+    ).label("engagement_score")
 
-    # Add public posts condition
-    relevance_conditions.append(
-        and_(
-            Post.industry.is_(None),
-            Post.visibility == "public"
-        )
-    )
-
-    query = query.where(or_(*relevance_conditions))
-
-    # Cursor pagination
-    if cursor_time and cursor_id:
-        query = query.where(
-            or_(
-                Post.created_at < cursor_time,
-                and_(
-                    Post.created_at == cursor_time,
-                    Post.id < cursor_id
+    # Fixed CASE statement - using proper SQLAlchemy 2.0 syntax
+    priority_score = case(
+        # Highest priority: Very recent posts from followed users or matching interests
+        (
+            and_(
+                Post.created_at > very_recent_threshold,
+                or_(
+                    Post.user_id == str(current_user.id),
+                    Post.user_id.in_(followed_ids),
+                    Post.skills.any(Skill.id.in_([s.id for s in current_user.skills])),
+                    and_(
+                        Post.industry == current_user.industry,
+                        Post.visibility.in_(["public", "industry"])
+                    )
                 )
+            ),
+            10000  # Highest priority
+        ),
+        # Medium priority: Recent posts
+        (
+            Post.created_at > recent_threshold,
+            5000 + engagement_score  # Boost recent posts
+        ),
+        else_=engagement_score  # Default to engagement score for older posts
+    ).label("priority_score")
+
+    # Base query conditions
+    base_conditions = [
+        Post.status == PostStatus.PUBLISHED,
+        Post.is_active == True,
+        Post.deleted == False,
+        or_(
+            Post.expires_at.is_(None),
+            Post.expires_at > datetime.utcnow()
+        )
+    ]
+    
+    if post_type:
+        base_conditions.append(Post.post_type == post_type)
+    if cutoff_date:
+        base_conditions.append(Post.created_at >= cutoff_date)
+
+    # Never exclude very recent posts from feed
+    if exclude_ids:
+        base_conditions.append(
+            or_(
+                Post.id.not_in(exclude_ids),
+                Post.created_at > very_recent_threshold
             )
         )
 
-    # Execute with engagement-based ordering
-    result = await session.execute(
-        query.order_by(
-            desc(Post.id),
-            desc("engagement_score"),
-            desc(Post.created_at)
+    # Build the complete query
+    query = (
+        select(
+            Post,
+            User,
+            priority_score
         )
-        .limit(limit + 3)  # Get extra for freshness check
+        .join(User)
+        .where(and_(*base_conditions))
+        .order_by(
+            desc("priority_score"),
+            desc(Post.created_at),
+            desc(Post.id)
+        )
+        .limit(limit + 5)  # Get extra for pagination
     )
+
+    # Execute query
+    result = await session.execute(query)
     posts = result.all()
 
-    # Split into fresh and main posts
-    fresh_posts = [
-        p for p in posts 
-        if p[0].created_at > datetime.utcnow() - timedelta(minutes=5)
-    ]
-    main_posts = [p for p in posts if p not in fresh_posts][:limit]
-    
     # Generate cursor
     next_cursor = None
-    if main_posts:
-        last_post = main_posts[-1][0]
+    if len(posts) > limit:
+        last_post = posts[limit - 1][0]
         next_cursor = f"{last_post.created_at.isoformat()},{last_post.id}"
 
-    return main_posts, fresh_posts[:3], next_cursor
+    return posts[:limit], [], next_cursor
 
 async def get_post(
     session: AsyncSession,
@@ -596,6 +586,7 @@ async def get_post(
 ) -> Optional[Post]:
     """
     Retrieve a single post with visibility enforcement.
+    Returns post with media_urls populated if media exists.
     """
     query = (
         select(Post)
@@ -620,13 +611,13 @@ async def get_post(
         )
 
     result = await session.execute(query)
-    return result.scalar_one_or_none()
+    post = result.scalar_one_or_none()
 
     if not post:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
-        )
+        return None
+
+    # Ensure media_urls is populated for response
+    post.media_urls = post.media_url.split(',') if post.media_url else []
     
     return post
 

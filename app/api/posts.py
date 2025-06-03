@@ -182,12 +182,13 @@ async def read_user_posts(
 @router.get("/{post_id}", response_model=PostRead)
 async def read_post(
     post_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
-    Get detailed view of a single post
+    Get detailed view of a single post with proper media URL handling
     """
-    post = await get_post(db, post_id)
+    post = await get_post(db, post_id, current_user)
     if not post or not post.is_active:
         raise CustomHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -206,7 +207,11 @@ async def read_post(
             error_code=POST_NOT_FOUND
         )
 
-    enriched = await enrich_multiple_posts(db, [post], [user])
+    # Ensure media_urls is properly set before enrichment
+    if not hasattr(post, 'media_urls') or post.media_urls is None:
+        post.media_urls = post.media_url.split(',') if post.media_url else []
+
+    enriched = await enrich_multiple_posts(db, [post], [user], str(current_user.id) if current_user else await enrich_multiple_posts(db, [post], [user]))
     return enriched[0]
 
 
