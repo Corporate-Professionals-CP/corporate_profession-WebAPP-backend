@@ -11,20 +11,27 @@ COOKIE_NAME = "seen_posts"
 def track_seen_posts(response: Response, new_post_ids: List[UUID]):
     """Store seen post IDs in a cookie with corruption protection"""
     try:
-        # Get existing IDs from cookie
-        existing = _parse_cookie_value(response.get_cookie(COOKIE_NAME))
-        
-        # Add new IDs and deduplicate
-        all_ids = list(dict.fromkeys([str(pid) for pid in (new_post_ids + existing)]))
-        
+        # Get existing IDs from request cookies (we'll pass them through)
+        existing_cookie = response.headers.get("set-cookie", "")
+        existing_ids = _parse_cookie_value(
+            existing_cookie.split(f"{COOKIE_NAME}=")[-1].split(";")[0] 
+            if COOKIE_NAME in existing_cookie 
+            else ""
+        )
+
+        # Combine and deduplicate IDs
+        all_ids = list(dict.fromkeys(
+            [str(pid) for pid in (new_post_ids + existing_ids)]
+        ))
+
         # Limit history size
         if len(all_ids) > MAX_SEEN_POSTS:
             all_ids = all_ids[:MAX_SEEN_POSTS]
-            
+
         # Set updated cookie
         cookie_value = ",".join(all_ids)
         response.set_cookie(
-            COOKIE_NAME,
+            key=COOKIE_NAME,
             value=cookie_value,
             max_age=30 * 24 * 3600,  # 30 days
             httponly=True,
@@ -49,15 +56,15 @@ def _parse_cookie_value(value: str) -> List[UUID]:
     """Safely parse cookie value with validation"""
     if not value:
         return []
-    
+
     cleaned = value.strip().strip(";")
     ids = []
-    
+
     for part in cleaned.split(","):
         try:
             # Validate UUID format
             ids.append(UUID(part.strip()))
         except (ValueError, AttributeError):
             continue
-            
+
     return ids
