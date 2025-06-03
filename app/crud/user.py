@@ -31,7 +31,6 @@ from app.schemas.user import (
 )
 from pydantic import HttpUrl
 from app.schemas.enums import (
-    Location,
     Industry,
     ExperienceLevel,
     JobTitle,
@@ -285,7 +284,7 @@ async def search_users(
     query: Optional[str] = None,
     industry: Optional[Industry] = None,
     experience: Optional[ExperienceLevel] = None,
-    location: Optional[Location] = None,
+    location: Optional[str] = None,
     skills: Optional[str] = None,
     job_title: Optional[str] = None,
     recruiter_only: bool = False,

@@ -28,7 +28,7 @@ class UserBase(BaseModel):
     status: Optional[str] = None
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
-    location: Optional[Location] = None
+    Location: Optional[str] = Field(None, min_length=2, max_length=100)
     visibility: Optional[ProfileVisibility] = Field(
         default_factory=lambda: [ProfileVisibility.PUBLIC],
         description="Who should see your profile?"
@@ -76,7 +76,7 @@ class UserUpdate(BaseModel):
     contact: Optional[List[ContactRead]] = Field(default_factory=list)
     industry: Optional[Industry] = None
     years_of_experience: Optional[ExperienceLevel] = None
-    location: Optional[Location] = None
+    location: Optional[str] = None
     age: Optional[int] = None
     sex: Optional[Gender] = None
     status: Optional[str] = None
@@ -103,7 +103,7 @@ class UserPublic(UserBase):
     education: Optional[List[EducationRead]] = Field(default_factory=list)
     contact: Optional[List[ContactRead]] = Field(default_factory=list)
     years_of_experience: Optional[ExperienceLevel]
-    location: Optional[Location]
+    location: Optional[str] = None
     skills: List[SkillRead] = []
     profile_completion: float = Field(0.0)  # Default value
     sections: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
@@ -192,7 +192,7 @@ class UserProfileResponse(BaseModel):
     updated_at: datetime
     profile_image_url: Optional[str]
     industry: Optional[Industry]
-    location: Optional[Location]
+    location: Optional[str] = None
     visibility: Optional[ProfileVisibility]
     years_of_experience: Optional[ExperienceLevel]
     work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)

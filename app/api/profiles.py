@@ -206,7 +206,7 @@ async def update_profile(
     # Conditionally require profile fields for regular professionals only
     is_professional = not user.recruiter_tag and not current_user.is_admin
     if is_professional:
-        required_fields = ["full_name", "email", "job_title", "industry", "location", "years_of_experience"]
+        required_fields = ["full_name", "job_title", "industry", "location", "years_of_experience"]
         for field in required_fields:
             if getattr(user_update, field) is None:
                 raise CustomHTTPException(
