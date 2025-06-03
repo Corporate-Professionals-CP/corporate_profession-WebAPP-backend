@@ -499,7 +499,6 @@ async def get_feed_posts(
         func.coalesce(Post.engagement["bookmark_count"].astext.cast(Float), 0) * 0.6
     ).label("engagement_score")
 
-    # Fixed CASE statement - using proper SQLAlchemy 2.0 syntax
     priority_score = case(
         # Highest priority: Very recent posts from followed users or matching interests
         (
@@ -586,7 +585,6 @@ async def get_post(
 ) -> Optional[Post]:
     """
     Retrieve a single post with visibility enforcement.
-    Returns post with media_urls populated if media exists.
     """
     query = (
         select(Post)

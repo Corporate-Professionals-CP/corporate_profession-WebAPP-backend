@@ -26,6 +26,7 @@ class UserDirectoryItem(BaseModel):
     full_name: str
     job_title: Optional[str]
     company: Optional[str]
+    profile_image_url: Optional[str]
     industry: Optional[str]
     is_recruiter: bool
     
