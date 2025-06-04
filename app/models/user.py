@@ -17,8 +17,7 @@ from app.schemas.enums import (
     Industry,
     ExperienceLevel,
     Gender,
-    ProfileVisibility,
-    JobTitle
+    ProfileVisibility
 )
 
 # Password hashing configuration

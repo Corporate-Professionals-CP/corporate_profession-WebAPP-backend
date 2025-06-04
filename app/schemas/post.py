@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_serializer, HttpUrl
 from app.schemas.user import UserPublic
-from app.schemas.enums import Industry, PostType, ExperienceLevel, JobTitle, PostVisibility
+from app.schemas.enums import Industry, PostType, ExperienceLevel, PostVisibility
 from pydantic import validator, field_validator
 
 
@@ -129,9 +129,7 @@ class PostRead(PostBase):
 
     class Config:
         from_attributes = True
-        json_encoders = {
-            JobTitle: lambda v: v.value if v else None
-        }
+
 
 class PostSearch(BaseModel):
     """Schema for post search/filter parameters"""

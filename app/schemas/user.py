@@ -5,9 +5,7 @@ from app.schemas.enums import (
     Industry,
     ExperienceLevel,
     Gender,
-    ProfileVisibility,
-    Location,
-    JobTitle
+    ProfileVisibility
 )
 from app.schemas.skill import SkillRead
 from app.schemas.contact import ContactRead

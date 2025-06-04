@@ -21,7 +21,7 @@ from app.schemas.user import UserRead, UserUpdate, UserDirectoryItem
 from app.schemas.post import PostRead, PostUpdate
 from app.schemas.skill import SkillRead
 from app.core.security import get_current_active_admin
-from app.schemas.enums import Industry, ExperienceLevel, JobTitle, PostVisibility
+from app.schemas.enums import Industry, ExperienceLevel, PostVisibility
 from app.crud import (
     user as crud_user,
     post as crud_post,

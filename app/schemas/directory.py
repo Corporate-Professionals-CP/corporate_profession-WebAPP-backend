@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel
-from app.schemas.enums import Industry, ExperienceLevel, JobTitle
+from app.schemas.enums import Industry, ExperienceLevel
 
 class LocationFilter(BaseModel):
     """Structured location filtering"""

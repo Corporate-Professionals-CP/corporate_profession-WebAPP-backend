@@ -32,8 +32,7 @@ from app.schemas.user import (
 from pydantic import HttpUrl
 from app.schemas.enums import (
     Industry,
-    ExperienceLevel,
-    JobTitle,
+    ExperienceLevel
 )
 from app.core.exceptions import CustomHTTPException
 from app.core.error_codes import (
