@@ -103,6 +103,7 @@ class UserPublic(UserBase):
     education: Optional[List[EducationRead]] = Field(default_factory=list)
     contact: Optional[List[ContactRead]] = Field(default_factory=list)
     years_of_experience: Optional[ExperienceLevel]
+    linkedin_profile: Optional[HttpUrl] = None
     location: Optional[str] = None
     skills: List[SkillRead] = []
     profile_completion: float = Field(0.0)  # Default value
@@ -194,6 +195,7 @@ class UserProfileResponse(BaseModel):
     industry: Optional[Industry]
     location: Optional[str] = None
     visibility: Optional[ProfileVisibility]
+    linkedin_profile: Optional[HttpUrl] = None
     years_of_experience: Optional[ExperienceLevel]
     work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)
     education: Optional[List[EducationRead]] = Field(default_factory=list)
