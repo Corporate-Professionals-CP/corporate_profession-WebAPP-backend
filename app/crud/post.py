@@ -251,92 +251,81 @@ async def repost_post(
     quote_text: Optional[str] = None,
     media_urls: Optional[List[str]] = None
 ) -> Post:
-    """
-    Create a repost (or quote-repost) of an existing post.
-    Users may optionally add media to the repost.
-    """
+    """Create a Twitter-style quote repost using only full_name"""
+    # Get original post with owner
     result = await session.execute(
         select(Post)
         .options(selectinload(Post.user))
         .where(Post.id == str(original_post_id))
     )
     original_post = result.scalar_one_or_none()
-
+    
     if not original_post:
         raise HTTPException(status_code=404, detail="Original post not found")
 
-    # Format user identifier
-    user_identifier = (
-        original_post.user.username
-        if hasattr(original_post.user, 'username') else
-        original_post.user.full_name
-        if hasattr(original_post.user, 'full_name') else
-        getattr(original_post.user, 'email', 'a user').split('@')[0]
-    )
+    # Get original poster's display name (using only full_name)
+    original_poster = original_post.user
+    display_name = original_poster.full_name if original_poster.full_name else "a user"
 
-    # Format content
-    if quote_text:
-        clean_quote = quote_text.strip()
-        clean_original = original_post.content.strip()
-        content = (
-            f"{clean_quote}\n\n"
-            f"—— Reposted from @{user_identifier} ——\n\n"
-            f"{clean_original}"
-        )
-        title = f"Quote: {original_post.title[:50]}..." if original_post.title else "Quote Repost"
-    else:
-        content = f"Reposted from @{user_identifier}:\n\n{original_post.content}"
-        title = f"Repost: {original_post.title}" if original_post.title else "Repost"
+    # Twitter-style formatting
+    content = quote_text.strip() if quote_text else None
+    title = None  # Don't use title for quote reposts
 
-    # Validate media and determine media_type as string
+    # Store original post data
+    original_post_info = {
+        "id": str(original_post.id),
+        "title": original_post.title,
+        "content": original_post.content,
+        "user": {
+            "id": str(original_poster.id),
+            "full_name": original_poster.full_name or ""
+        },
+        "media_urls": original_post.media_url.split(',') if original_post.media_url else []
+    }
+
+    # Validate media
     media_type = None
     if media_urls:
         for url in media_urls:
-            # url might be HttpUrl object, so convert to str if needed
             str_url = str(url)
             if not str_url.startswith("https://storage.googleapis.com/"):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid media URL format"
-                )
-        if len(media_urls) > 1:
-            media_type = "multiple"
-        else:
-            first_url = str(media_urls[0]).lower()
-            media_type = "video" if any(ext in first_url for ext in [".mp4", ".mov"]) else "image"
+                raise HTTPException(400, "Invalid media URL format")
+        
+        media_type = (
+            "multiple" if len(media_urls) > 1 else
+            "video" if any(ext in str(media_urls[0]).lower() for ext in [".mp4", ".mov"]) else
+            "image"
+        )
 
     repost = Post(
         title=title,
-        content=content,
+        content=content,  # Just the quote text
         post_type=original_post.post_type,
         is_repost=True,
+        is_quote_repost=bool(quote_text),
         original_post_id=str(original_post.id),
+        original_post_info=original_post_info,
         user_id=str(current_user.id),
         visibility=PostVisibility.PUBLIC,
-        tags=original_post.tags.copy() if original_post.tags else [],
-        skills=original_post.skills.copy() if original_post.skills else [],
         media_url=",".join([str(u) for u in media_urls]) if media_urls else None,
         media_type=media_type,
         engagement=PostEngagement().dict(),
-        published_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        published_at=datetime.utcnow()
     )
 
-    # Increment share count on original post engagement
-    if hasattr(original_post, 'engagement') and isinstance(original_post.engagement, dict):
-        original_post.engagement["share_count"] = original_post.engagement.get("share_count", 0) + 1
-    else:
-        original_post.engagement = {"share_count": 1}
+    # Update original post engagement
+    if not hasattr(original_post, 'engagement'):
+        original_post.engagement = {}
+    original_post.engagement["share_count"] = original_post.engagement.get("share_count", 0) + 1
 
     session.add(repost)
     await session.commit()
     await session.refresh(repost)
-
-    # Add media_urls list for response convenience
+    
+    # For response
     repost.media_urls = repost.media_url.split(',') if repost.media_url else []
-
+    
     return repost
-
 
 
 async def undo_repost_operation(

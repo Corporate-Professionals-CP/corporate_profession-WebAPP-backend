@@ -15,7 +15,7 @@ from pydantic import validator, field_validator
 
 class PostBase(BaseModel):
     """Base schema containing core post fields"""
-    title: str = Field(..., min_length=5, max_length=100)
+    title: Optional[str] = Field(None, nullable=True)
     content: str = Field(..., min_length=10, max_length=2000)
     post_type: PostType
     industry: Optional[Industry] = None
@@ -47,7 +47,7 @@ class PostCreate(PostBase):
 
 class PostUpdate(BaseModel):
     """Schema for post updates (all fields optional)"""
-    title: Optional[str] = Field(None, min_length=5, max_length=100)
+    title: Optional[str] = Field(None, nullable=True)
     content: Optional[str] = Field(None, min_length=10, max_length=2000)
     post_type: Optional[PostType] = None
     industry: Optional[Industry] = None

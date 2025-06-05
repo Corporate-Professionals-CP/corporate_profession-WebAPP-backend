@@ -52,7 +52,7 @@ class PostEngagement(SQLModel):
 
 class Post(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    title: str = Field(..., min_length=5, max_length=100)
+    title: Optional[str] = Field(None, nullable=True)
     content: str = Field(..., min_length=10, max_length=5000)
     post_type: PostType = Field(
         sa_column=Column(
@@ -143,6 +143,7 @@ class Post(SQLModel, table=True):
     )
 
     is_repost: bool = Field(default=False)
+    is_quote_repost: bool = Field(default=False)
     original_post_id: Optional[str] = Field(
         default=None,
         foreign_key="post.id",
