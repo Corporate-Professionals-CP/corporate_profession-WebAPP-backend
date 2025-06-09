@@ -9,7 +9,7 @@ from uuid import UUID
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy import select, or_, and_, delete
 from sqlalchemy.orm import selectinload
 from app.db.database import get_db
@@ -257,15 +257,15 @@ async def update_existing_post(
         ) 
     return updated_post
 
-@router.post("/{post_id}/repost", response_model=PostRead)
+@router.post("/{post_id}/repost", response_model=Dict[str, Any])
 async def repost_content(
     post_id: UUID,
     payload: RepostRequest = Body(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Create a repost or quote-repost"""
-    # Get the original post with its owner
+    """Create a repost or quote-repost (now returns both quote and original post)"""
+    # Get original post (unchanged)
     original_post_result = await db.execute(
         select(Post)
         .options(selectinload(Post.user))
@@ -280,8 +280,8 @@ async def repost_content(
             error_code=POST_NOT_FOUND
         )
 
-    # Create the repost
-    repost = await repost_post(
+    # Create the repost (now returns a dict)
+    repost_data = await repost_post(
         session=db,
         original_post_id=post_id,
         current_user=current_user,
@@ -289,7 +289,7 @@ async def repost_content(
         media_urls=payload.media_urls
     )
 
-    # Send notification if not self-repost
+    # Send notification (use repost_data["quote_repost"]["id"])
     if str(original_post.user_id) != str(current_user.id):
         await create_notification(
             db,
@@ -298,17 +298,11 @@ async def repost_content(
                 actor_id=current_user.id,
                 type=NotificationType.POST_REPOST,
                 message=f"{current_user.full_name} reposted your post: '{original_post.title[:30]}...'",
-                reference_id=str(repost.id)
+                reference_id=repost_data["quote_repost"]["id"]
             )
         )
 
-    # Load user for enrichment
-    user_result = await db.execute(select(User).where(User.id == repost.user_id))
-    repost_user = user_result.scalar_one()
-
-    enriched_posts = await enrich_multiple_posts(db, [repost], [repost_user])
-    return enriched_posts[0]
-
+    return repost_data
 
 @router.delete("/reposts/{repost_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def undo_repost(

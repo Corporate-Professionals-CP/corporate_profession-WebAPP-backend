@@ -6,7 +6,7 @@ Complete Post CRUD operations with:
 - Better error handling
 """
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -250,8 +250,8 @@ async def repost_post(
     current_user: User,
     quote_text: Optional[str] = None,
     media_urls: Optional[List[str]] = None
-) -> Post:
-    """Create a Twitter-style quote repost using only full_name"""
+) -> Dict[str, Any]:  # Change return type to a dictionary
+    """Create style quote repost and return BOTH the quote and original post."""
     # Get original post with owner
     result = await session.execute(
         select(Post)
@@ -259,19 +259,16 @@ async def repost_post(
         .where(Post.id == str(original_post_id))
     )
     original_post = result.scalar_one_or_none()
-    
+
     if not original_post:
         raise HTTPException(status_code=404, detail="Original post not found")
 
-    # Get original poster's display name (using only full_name)
+    # Create the quote repost
     original_poster = original_post.user
     display_name = original_poster.full_name if original_poster.full_name else "a user"
-
-    # Twitter-style formatting
     content = quote_text.strip() if quote_text else None
-    title = None  # Don't use title for quote reposts
+    title = None
 
-    # Store original post data
     original_post_info = {
         "id": str(original_post.id),
         "title": original_post.title,
@@ -290,7 +287,7 @@ async def repost_post(
             str_url = str(url)
             if not str_url.startswith("https://storage.googleapis.com/"):
                 raise HTTPException(400, "Invalid media URL format")
-        
+
         media_type = (
             "multiple" if len(media_urls) > 1 else
             "video" if any(ext in str(media_urls[0]).lower() for ext in [".mp4", ".mov"]) else
@@ -299,7 +296,7 @@ async def repost_post(
 
     repost = Post(
         title=title,
-        content=content,  # Just the quote text
+        content=content,
         post_type=original_post.post_type,
         is_repost=True,
         is_quote_repost=bool(quote_text),
@@ -321,11 +318,27 @@ async def repost_post(
     session.add(repost)
     await session.commit()
     await session.refresh(repost)
-    
-    # For response
-    repost.media_urls = repost.media_url.split(',') if repost.media_url else []
-    
-    return repost
+
+    # Prepare the combined response
+    response = {
+        "quote_repost": {
+            "id": str(repost.id),
+            "content": repost.content,
+            "user_id": str(current_user.id),
+            "media_urls": repost.media_url.split(',') if repost.media_url else [],
+            "created_at": repost.published_at.isoformat()
+        },
+        "original_post": {
+            "id": str(original_post.id),
+            "content": original_post.content,
+            "user_id": str(original_poster.id),
+            "user_full_name": original_poster.full_name,
+            "media_urls": original_post.media_url.split(',') if original_post.media_url else [],
+            "created_at": original_post.published_at.isoformat()
+        }
+    }
+
+    return response
 
 
 async def undo_repost_operation(
