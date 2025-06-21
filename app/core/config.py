@@ -4,6 +4,7 @@ Loads from environment variables with type checking.
 """
 
 from pathlib import Path
+from functools import lru_cache
 from pydantic import AnyUrl, PostgresDsn, RedisDsn, validator
 from pydantic_settings import BaseSettings
 from typing import Optional, List
@@ -103,6 +104,10 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
         extra = "ignore"  
 
+
+@lru_cache()
+def get_settings():
+    return Settings()
 
 settings = Settings()
 

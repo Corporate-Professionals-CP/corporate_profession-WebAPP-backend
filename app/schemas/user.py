@@ -138,6 +138,7 @@ class ProfileImageResponse(BaseModel):
 class UserDirectoryItem(BaseModel):
     id: str
     full_name: Optional[str]
+    profile_image_url: Optional[str] = None
     job_title: Optional[str]
     company: Optional[str]
     industry: Optional[Industry]
