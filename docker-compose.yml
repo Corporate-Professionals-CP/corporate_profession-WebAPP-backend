@@ -1,0 +1,10 @@
+services:
+  cp-backend:
+    build: .
+    container_name: cp-backend
+    restart: always
+    ports:
+      - 8000:8000
+    env_file: "/home/be.env"
+    volumes:
+      - /home/be.env:/programs/.env
