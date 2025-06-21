@@ -2,8 +2,9 @@ from pydantic import BaseModel, HttpUrl, validator
 from typing import Optional, Union
 from datetime import datetime
 
+
 class VolunteeringBase(BaseModel):
-    role: str 
+    role: str
     organization: str
     organization_url: Optional[Union[str, HttpUrl]] = None
     location: str
@@ -18,8 +19,10 @@ class VolunteeringBase(BaseModel):
             return str(v)
         return v
 
+
 class VolunteeringCreate(VolunteeringBase):
     pass
+
 
 class VolunteeringUpdate(BaseModel):
     role: Optional[str] = None
@@ -37,9 +40,10 @@ class VolunteeringUpdate(BaseModel):
             return str(v)
         return v
 
+
 class VolunteeringRead(VolunteeringBase):
     id: str
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

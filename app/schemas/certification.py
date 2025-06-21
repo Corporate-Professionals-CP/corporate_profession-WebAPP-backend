@@ -3,6 +3,7 @@ from typing import Optional, Union
 from datetime import date, datetime
 from uuid import UUID
 
+
 class CertificationBase(BaseModel):
     name: Optional[str] = None
     organization: Optional[str] = None
@@ -18,15 +19,18 @@ class CertificationBase(BaseModel):
             return str(v)
         return v
 
+
 class CertificationCreate(CertificationBase):
     pass
 
+
 class CertificationUpdate(CertificationBase):
     pass
+
 
 class CertificationRead(CertificationBase):
     id: UUID
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
