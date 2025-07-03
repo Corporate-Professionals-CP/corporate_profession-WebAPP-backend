@@ -534,6 +534,19 @@ async def get_feed_posts(
         or_(
             Post.expires_at.is_(None),
             Post.expires_at > datetime.utcnow()
+        ),
+        # Visibility conditions
+        or_(
+            Post.visibility == "public",
+            and_(
+                Post.visibility == "industry",
+                Post.industry == current_user.industry
+            ),
+            and_(
+                Post.visibility == "followers",
+                Post.user_id.in_(followed_ids)
+            ),
+            Post.user_id == str(current_user.id)  # User can always see their own posts
         )
     ]
     

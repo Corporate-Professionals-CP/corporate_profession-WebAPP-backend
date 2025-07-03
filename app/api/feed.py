@@ -192,6 +192,18 @@ async def get_network_feed(
             or_(
                 Post.expires_at.is_(None),
                 Post.expires_at > datetime.utcnow()
+            ),
+            # Visibility conditions
+            or_(
+                Post.visibility == "public",
+                and_(
+                    Post.visibility == "industry",
+                    Post.industry == current_user.industry
+                ),
+                and_(
+                    Post.visibility == "followers",
+                    Post.user_id.in_(followed_user_ids)
+                )
             )
         ]
 
