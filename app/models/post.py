@@ -157,6 +157,12 @@ class Post(SQLModel, table=True):
             lazy="selectin"
         )
     )
+    
+    # Store original post information for reposts (JSON field)
+    original_post_info: Optional[Dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True)
+    )
 
 
     @validator('expires_at')

@@ -29,6 +29,7 @@ from collections import defaultdict
 from app.models.notification import Notification
 from app.crud.notification import create_notification
 from app.schemas.enums import NotificationType
+from app.crud.post_reaction import get_reactions_for_post
 
 async def create_post(
     session: AsyncSession,
@@ -954,6 +955,24 @@ async def enrich_multiple_posts(
             "is_active": post.is_active,
             "bookmark_count": bookmark_map.get(post_id_str, 0)
         }
+        
+        # Handle repost enrichment - ensure original_post_info is available
+        if post.is_repost and post.original_post_info:
+            enriched_data["original_post_info"] = post.original_post_info
+        elif post.is_repost and post.original_post_id:
+            # If original_post_info is None but we have original_post_id, get it from relationship
+            if hasattr(post, 'original_post') and post.original_post:
+                original_post = post.original_post
+                enriched_data["original_post_info"] = {
+                    "id": original_post.id,
+                    "title": original_post.title,
+                    "content": original_post.content,
+                    "user": {
+                        "id": original_post.user_id,
+                        "full_name": original_post.user.full_name if hasattr(original_post, 'user') and original_post.user else "Unknown User",
+                        "job_title": original_post.user.job_title if hasattr(original_post, 'user') and original_post.user else None
+                    }
+                }
         
         enriched.append(PostRead(**enriched_data))
 

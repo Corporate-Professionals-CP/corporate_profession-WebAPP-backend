@@ -2,18 +2,33 @@
 Database configuration with async support
 """
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession as AsyncSessionSQLModel
+from typing import AsyncGenerator
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Use the original DATABASE_URL and modify for asyncpg
 async_engine = create_async_engine(
     str(settings.DATABASE_URL).replace("postgresql://", "postgresql+asyncpg://", 1),
     echo=True,  # will be False in production
-    future=True  # Required for SQLModel async support
+    future=True,  # Required for SQLModel async support
+    pool_size=20,  # Number of connections to maintain
+    max_overflow=30,  # Additional connections that can be created
+    pool_pre_ping=True,  # Verify connections before use
+    pool_recycle=3600,  # Recycle connections after 1 hour
+    connect_args={
+        "server_settings": {
+            "application_name": "corporate_professionals_app",
+        }
+    }
 )
 
 # Async session factory
@@ -29,7 +44,7 @@ async def init_db():
     async with async_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Async database session dependency
     Usage:
@@ -38,3 +53,19 @@ async def get_db() -> AsyncSession:
     """
     async with AsyncSessionLocal() as session:
         yield session
+
+@asynccontextmanager
+async def get_db_with_retry(max_retries: int = 3):
+    """
+    Database session with retry logic for connection issues
+    """
+    for attempt in range(max_retries):
+        try:
+            async with AsyncSessionLocal() as session:
+                yield session
+                return
+        except Exception as e:
+            logger.warning(f"Database connection attempt {attempt + 1} failed: {e}")
+            if attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(1)  # Wait before retry

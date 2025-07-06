@@ -13,6 +13,7 @@ from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
 import sqlalchemy
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select, update, and_, or_
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status, UploadFile
@@ -44,6 +45,7 @@ from app.core.error_codes import (
     USER_BULK_ACTION_ERROR,
     USER_PROFILE_ERROR,
     FILE_UPLOAD_ERROR,
+    FILE_DELETE_ERROR,
     DATABASE_INTEGRITY_ERROR,
     INVALID_USER_DATA,
     CV_UPLOAD_FAILED
@@ -622,7 +624,7 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
         'email': 10,
         'industry': 10,
         'location': 10,
-        'working_experinece': 5,
+        'work_experiences': 5,
         'job_title': 10,
         'skills': 10,
         'education': 10,
@@ -650,9 +652,16 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
     for field, weight in required_fields.items():
         value = getattr(user, field, None)
         if field == "skills":
-            is_completed = value is not None and isinstance(value, list) and len(value) > 0
+            # Check if user has skills relationship
+            is_completed = (hasattr(user, 'skills') and user.skills and len(user.skills) > 0)
+        elif field == "work_experiences":
+            # Check if user has work experiences relationship
+            is_completed = (hasattr(user, 'work_experiences') and user.work_experiences and len(user.work_experiences) > 0)
+        elif field == "education":
+            # Check if user has education relationship
+            is_completed = (hasattr(user, 'education') and user.education and len(user.education) > 0)
         else:
-            is_completed = bool(value)
+            is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
 
         if is_completed:
             completion['total_score'] += weight
@@ -664,7 +673,15 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
     # Optional fields - add only if total_score doesn't exceed max_score
     for field, weight in optional_fields.items():
         value = getattr(user, field, None)
-        is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
+        if field == "certifications":
+            # Check if user has certifications relationship
+            is_completed = (hasattr(user, 'certifications') and user.certifications and len(user.certifications) > 0)
+        elif field == "volunteering":
+            # Check if user has volunteering relationship
+            is_completed = (hasattr(user, 'volunteering') and user.volunteering and len(user.volunteering) > 0)
+        else:
+            is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
+            
         if is_completed:
             # Only add if it won't push total_score beyond max_score
             if completion['total_score'] + weight <= completion['max_score']:
@@ -673,6 +690,8 @@ async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserPr
             else:
                 # Mark optional field incomplete if adding it would exceed max_score
                 completion['sections'][field] = {"completed": False, "weight": weight}
+        else:
+            completion['sections'][field] = {"completed": False, "weight": weight}
 
     # Compute percentage
     percentage = round((completion['total_score'] / completion['max_score']) * 100, 2)

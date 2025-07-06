@@ -3,3 +3,4 @@ myenv/
 __pycache__/
 gcs_credentials.json
 debug.log
+venv/

@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.bookmark import Bookmark
 from app.models.post import Post, PostEngagement
 from app.crud.bookmark import create_bookmark, delete_bookmark
+from app.crud.post import enrich_multiple_posts
 from app.schemas.bookmark import BookmarkCreate, BookmarkRead
 from app.schemas.post import PostRead
 from app.core.exceptions import CustomHTTPException
@@ -28,10 +29,11 @@ async def get_user_bookmarks(
 ):
     """Get all posts bookmarked by the current user"""
     try:
-        # Main query to get bookmarked posts
+        # Main query to get bookmarked posts with user information
         query = (
-            select(Post)
+            select(Post, User)
             .join(Bookmark, Bookmark.post_id == Post.id)
+            .join(User, User.id == Post.user_id)
             .where(Bookmark.user_id == str(current_user.id))
             .order_by(Bookmark.created_at.desc())
             .limit(limit)
@@ -39,38 +41,21 @@ async def get_user_bookmarks(
         )
 
         result = await db.execute(query)
-        posts = result.scalars().all()
+        posts_with_users = result.all()
 
-        if not posts:
+        if not posts_with_users:
             raise CustomHTTPException(status_code=404, detail="No bookmarks found")
 
-        # Process the results
-        response_posts = []
-        for post in posts:
-            # Get bookmark count for this post
-            bookmark_count = await db.scalar(
-                select(func.count(Bookmark.id))
-                .where(Bookmark.post_id == post.id)
-            )
+        # Extract posts and users
+        posts = [post for post, user in posts_with_users]
+        users = [user for post, user in posts_with_users]
 
-            # Prepare post data
-            post_data = {
-                **post.__dict__,
-                "is_bookmarked": True,  # Since these are bookmarked posts
-                "total_comments": getattr(post, "total_comments", 0),
-                "total_reactions": getattr(post, "total_reactions", 0),
-                "is_active": getattr(post, "is_active", True)  # Ensure is_active is set
-            }
+        # Use the enrichment function to add all engagement data
+        enriched_posts = await enrich_multiple_posts(
+            db, posts, users, str(current_user.id)
+        )
 
-            # Ensure engagement data exists
-            if not post_data.get("engagement"):
-                post_data["engagement"] = {}
-            post_data["engagement"]["bookmark_count"] = bookmark_count or 0
-
-            # Convert to PostRead schema
-            response_posts.append(PostRead(**post_data))
-
-        return response_posts
+        return enriched_posts
 
     except CustomHTTPException as e:
         raise e
@@ -173,10 +158,30 @@ async def toggle_bookmark(
             action = True
 
         await db.commit()
+        
+        # Get enriched post data to return complete information
+        post_with_user = await db.execute(
+            select(Post, User)
+            .join(User, User.id == Post.user_id)
+            .where(Post.id == str(post_id))
+        )
+        post_data = post_with_user.first()
+        
+        if post_data:
+            post, user = post_data
+            enriched_posts = await enrich_multiple_posts(
+                db, [post], [user], str(current_user.id)
+            )
+            
+            # Return enriched data with bookmark status and counts
+            enriched_post = enriched_posts[0]
+            return {
+                "bookmarked": action, 
+                "count": post.engagement["bookmark_count"],
+                "post": enriched_post.__dict__
+            }
+        
         return {"bookmarked": action, "count": post.engagement["bookmark_count"]}
-
-    except CustomHTTPException as e:
-        raise e
     except Exception as e:
         await db.rollback()
         logger.error(f"Error toggling bookmark: {str(e)}")

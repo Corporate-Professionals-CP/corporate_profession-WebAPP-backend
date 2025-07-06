@@ -214,36 +214,6 @@ class User(UserBase, table=True):
         """Verify password against stored hash"""
         return pwd_context.verify(password, self.hashed_password)
 
-    def update_profile_completion(self):
-        """Calculate profile completion percentage"""
-        required_fields = [
-            'full_name', 'job_title', 'industry',
-            'location', 'education', 'skill' 
-        ]
-        optional_fields = [
-            'email', 'phone', 'certifications',
-            'linkedin_profile', 'cv_url', 'topics',
-            'industry', 'years_of_experience', 'company',
-            'visibility', 'working_experiences',
-            'volunteering', 'bio'
-        ]
-
-        completed = 0
-        total_weight = len(required_fields) * 10 + len(optional_fields) * 2
-
-        for field in required_fields:
-            if getattr(self, field, None):
-                completed += 10
-
-        for field in optional_fields:
-            if getattr(self, field, None):
-                completed += 2
-
-        if self.cv_url:
-            completed += 10
-
-        self.profile_completion = min(round((completed / total_weight) * 100, 2), 100)
-
     @property
     def public_profile(self) -> dict:
         """ Compliant public view """
