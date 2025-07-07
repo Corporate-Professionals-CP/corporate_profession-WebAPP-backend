@@ -6,6 +6,7 @@ Complete Post CRUD operations with:
 - Better error handling
 """
 
+import logging
 from typing import List, Optional, Tuple, Union, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -28,6 +29,8 @@ from sqlalchemy.orm import selectinload, Mapped
 from collections import defaultdict
 from app.models.notification import Notification
 from app.crud.notification import create_notification
+
+logger = logging.getLogger(__name__)
 from app.schemas.enums import NotificationType
 from app.crud.post_reaction import get_reactions_for_post
 
@@ -960,17 +963,34 @@ async def enrich_multiple_posts(
         if post.is_repost and post.original_post_info:
             enriched_data["original_post_info"] = post.original_post_info
         elif post.is_repost and post.original_post_id:
-            # If original_post_info is None but we have original_post_id, get it from relationship
-            if hasattr(post, 'original_post') and post.original_post:
-                original_post = post.original_post
+            # If original_post_info is None but we have original_post_id, get it from database
+            try:
+                original_post_stmt = select(Post).where(Post.id == post.original_post_id).options(selectinload(Post.user))
+                original_post_result = await db.execute(original_post_stmt)
+                original_post = original_post_result.scalar_one_or_none()
+                
+                if original_post:
+                    enriched_data["original_post_info"] = {
+                        "id": original_post.id,
+                        "title": original_post.title,
+                        "content": original_post.content,
+                        "user": {
+                            "id": original_post.user_id,
+                            "full_name": original_post.user.full_name if original_post.user else "Unknown User",
+                            "job_title": original_post.user.job_title if original_post.user else None
+                        }
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to load original post info for repost {post.id}: {e}")
+                # Fallback to basic info without user details
                 enriched_data["original_post_info"] = {
-                    "id": original_post.id,
-                    "title": original_post.title,
-                    "content": original_post.content,
+                    "id": post.original_post_id,
+                    "title": None,
+                    "content": "Original post unavailable",
                     "user": {
-                        "id": original_post.user_id,
-                        "full_name": original_post.user.full_name if hasattr(original_post, 'user') and original_post.user else "Unknown User",
-                        "job_title": original_post.user.job_title if hasattr(original_post, 'user') and original_post.user else None
+                        "id": None,
+                        "full_name": "Unknown User",
+                        "job_title": None
                     }
                 }
         
