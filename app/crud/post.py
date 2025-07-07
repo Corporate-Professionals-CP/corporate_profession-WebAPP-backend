@@ -38,9 +38,10 @@ async def create_post(
     session: AsyncSession,
     post_data: PostCreate,
     current_user: User
-) -> Post:
+) -> PostRead:
     """
     Optimized post creation with enhanced validation and error handling
+    Returns enriched post data for immediate display without requiring refresh
     """
     try:
         # Validate media URLs if provided
@@ -115,8 +116,24 @@ async def create_post(
             db_post.media_urls = db_post.media_url.split(',')
         else:
             db_post.media_urls = []
-            
-        return db_post
+        
+        # Enrich the post with all necessary data for immediate display
+        enriched_post = await enrich_multiple_posts(
+            session, 
+            [db_post], 
+            [db_post.user], 
+            str(current_user.id)
+        )
+        
+        # Broadcast new post to connected users via WebSocket
+        if enriched_post:
+            from app.core.ws_manager import notification_manager
+            await notification_manager.broadcast_new_post(
+                enriched_post[0].dict(),
+                exclude_user_id=str(current_user.id)
+            )
+        
+        return enriched_post[0] if enriched_post else db_post
 
     except Exception as e:
         await session.rollback()

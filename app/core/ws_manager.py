@@ -47,5 +47,27 @@ class NotificationManager:
         }
         await self._send_notification(user_id, notification)
 
+    async def broadcast_new_post(self, post_data: dict, exclude_user_id: str = None):
+        """Broadcast new post to all connected users (except the author)"""
+        notification = {
+            "type": "new_post",
+            "data": post_data
+        }
+        
+        for user_id, websocket in self.active_connections.items():
+            if user_id != exclude_user_id:  # Don't send to the post author
+                try:
+                    await websocket.send_text(json.dumps(notification))
+                except Exception as e:
+                    logger.error(f"Error broadcasting new post to {user_id}: {str(e)}")
+
+    async def send_feed_update(self, user_id: str, post_data: dict):
+        """Send feed update to a specific user"""
+        notification = {
+            "type": "feed_update",
+            "data": post_data
+        }
+        await self._send_notification(user_id, notification)
+
 # Singleton instance
 manager = NotificationManager()

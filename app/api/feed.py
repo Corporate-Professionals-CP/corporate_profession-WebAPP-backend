@@ -285,3 +285,60 @@ async def get_network_feed(
             detail="Error retrieving network feed posts",
             error_code=NETWORK_FEED_ERROR
         )
+
+@router.get("/refresh", response_model=FeedResponse)
+async def refresh_feed(
+    request: Request,
+    response: Response,
+    limit: int = Query(10, le=50),  # Smaller limit for refresh
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the most recent posts for feed refresh after creating a new post
+    Returns only the freshest posts to avoid duplicates
+    """
+    try:
+        logger.info(f"Feed refresh request for user {current_user.id}")
+        
+        # Get only very recent posts (last 5 minutes)
+        recent_cutoff = datetime.utcnow() - timedelta(minutes=5)
+        
+        # Get prioritized posts
+        prioritized_posts, _, _ = await get_feed_posts(
+            db,
+            current_user,
+            cutoff_date=recent_cutoff,
+            limit=limit,
+            exclude_ids=[]  # Don't exclude any for refresh
+        )
+        
+        logger.info(f"Retrieved {len(prioritized_posts)} recent posts for refresh")
+
+        # Convert media URLs and enrich
+        posts_for_enrich = []
+        for post, user, _ in prioritized_posts:
+            post.media_urls = post.media_url.split(',') if post.media_url else []
+            posts_for_enrich.append((post, user))
+
+        logger.info("Enriching posts for refresh...")
+        enriched_posts = await enrich_multiple_posts(
+            db,
+            [p[0] for p in posts_for_enrich],
+            [p[1] for p in posts_for_enrich],
+            str(current_user.id)
+        )
+        
+        logger.info(f"Successfully enriched {len(enriched_posts)} posts for refresh")
+
+        return FeedResponse(
+            main_posts=enriched_posts,
+            fresh_posts=[],
+            next_cursor=None
+        )
+    except Exception as e:
+        logger.error(f"Feed refresh error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to refresh feed: {str(e)}"
+        )
