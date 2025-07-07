@@ -956,6 +956,9 @@ async def enrich_multiple_posts(
                 for rtype in ReactionType
             ),
             "is_active": post.is_active,
+            "is_repost": post.is_repost,
+            "is_quote_repost": getattr(post, 'is_quote_repost', False),
+            "reposted_by": user.full_name if post.is_repost else None,
             "bookmark_count": bookmark_map.get(post_id_str, 0)
         }
         

@@ -117,6 +117,8 @@ class PostRead(BaseModel):
     has_reacted: bool = False
     reactions_breakdown: ReactionBreakdown = Field(default_factory=ReactionBreakdown)
     is_repost: bool = False
+    is_quote_repost: bool = False
+    reposted_by: Optional[str] = None  # Who reposted this (for display)
     original_post_id: Optional[UUID] = None
     original_post_info: Optional[OriginalPostInfo] = None
 

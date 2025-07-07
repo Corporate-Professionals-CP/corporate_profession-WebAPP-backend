@@ -4,3 +4,4 @@ __pycache__/
 gcs_credentials.json
 debug.log
 venv/
+repost_data_structure_guide.py
