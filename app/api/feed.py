@@ -31,23 +31,8 @@ from app.core.error_codes import (
     INVALID_REQUEST_PARAMS
 )
 
-# Setup logger
+# Setup logger - simplified to work with FastAPI's logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Set log level
-
-# Create console handler
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-
-# Add formatter
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-
-# Add handler to logger
-logger.addHandler(ch)
-
-# Now you can use it
-logger.info("This is an info message")
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
