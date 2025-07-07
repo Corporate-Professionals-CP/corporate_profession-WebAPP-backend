@@ -71,3 +71,4 @@ class NotificationManager:
 
 # Singleton instance
 manager = NotificationManager()
+notification_manager = manager  # Alias for backward compatibility

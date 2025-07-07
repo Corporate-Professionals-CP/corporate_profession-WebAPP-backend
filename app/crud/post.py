@@ -127,11 +127,15 @@ async def create_post(
         
         # Broadcast new post to connected users via WebSocket
         if enriched_post:
-            from app.core.ws_manager import notification_manager
-            await notification_manager.broadcast_new_post(
-                enriched_post[0].dict(),
-                exclude_user_id=str(current_user.id)
-            )
+            try:
+                from app.core.ws_manager import notification_manager
+                await notification_manager.broadcast_new_post(
+                    enriched_post[0].dict(),
+                    exclude_user_id=str(current_user.id)
+                )
+            except Exception as e:
+                logger.warning(f"Failed to broadcast new post via WebSocket: {e}")
+                # Don't fail post creation if WebSocket broadcast fails
         
         return enriched_post[0] if enriched_post else db_post
 
