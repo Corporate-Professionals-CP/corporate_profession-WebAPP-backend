@@ -4,6 +4,7 @@ Database configuration with async support
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -13,7 +14,17 @@ from typing import AsyncGenerator
 
 from app.core.config import settings
 
+# Configure logging based on environment
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 logger = logging.getLogger(__name__)
+
+# Log environment information
+logger.info(f"Environment: {getattr(settings, 'ENVIRONMENT', 'Unknown')}")
+logger.info(f"Database URL configured: {bool(settings.DATABASE_URL)}")
 
 # Use the original DATABASE_URL and modify for asyncpg
 async_engine = create_async_engine(
@@ -51,8 +62,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async def some_endpoint(db: AsyncSession = Depends(get_db)):
         ...
     """
-    async with AsyncSessionLocal() as session:
-        yield session
+    try:
+        logger.info("Creating database session...")
+        async with AsyncSessionLocal() as session:
+            logger.info("Database session created successfully")
+            yield session
+    except Exception as e:
+        logger.error(f"Database session creation failed: {str(e)}", exc_info=True)
+        raise
 
 @asynccontextmanager
 async def get_db_with_retry(max_retries: int = 3):

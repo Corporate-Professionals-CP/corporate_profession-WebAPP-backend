@@ -85,27 +85,43 @@ class OriginalPostInfo(BaseModel):
     content: Optional[str]
     user: OriginalPostUser
 
-class PostRead(PostBase):
+class PostRead(BaseModel):
     """Complete post schema for API responses"""
     id: UUID
+    title: Optional[str] = Field(None, nullable=True)
+    content: str = Field(..., max_length=2000)  # Removed min_length for existing data
+    post_type: PostType
+    industry: Optional[Industry] = None
+    visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
+    experience_level: Optional[ExperienceLevel] = None
+    job_title: Optional[str] = None
+    tags: Optional [List[str]] = Field(default_factory=list)
+    skills: List[str]
+    expires_at: Optional[datetime] = None
+    media_urls: Optional[List[str]] = Field(
+        None,
+        description="Array of media URLs from /media/batch upload"
+    )
+    media_type: Optional[str] = Field(default="image")
+    
     user: Optional [UserPublic] = None
     username: Optional[str] = None
-    skills: List[str]
     is_active: bool
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
     total_comments: int = 0
     total_reposts: int = 0
     total_reactions: int = 0
     is_bookmarked: bool = False
-    media_urls: Optional[List[str]] = None
     has_reacted: bool = False
     reactions_breakdown: ReactionBreakdown = Field(default_factory=ReactionBreakdown)
     is_repost: bool = False
     original_post_id: Optional[UUID] = None
     original_post_info: Optional[OriginalPostInfo] = None
+
+    class Config:
+        use_enum_values = True
 
 
     @validator('skills', pre=True)
