@@ -139,23 +139,25 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Update login tracking
+    user.last_login_at = datetime.utcnow()
+    user.login_count += 1
+    user.last_active_at = datetime.utcnow()
+    
+    # Store user ID and scopes before any commits to avoid lazy loading issues
+    user_id = str(user.id)
     scopes = ["user"]
     if user.recruiter_tag:
         scopes.append("recruiter")
     if user.is_admin:
         scopes.append("admin")
-
-    # Update login tracking
-    user.last_login_at = datetime.utcnow()
-    user.login_count += 1
-    user.last_active_at = datetime.utcnow()
     
     # Log the login activity
     try:
         from app.utils.activity_logger import log_user_activity
         await log_user_activity(
             db=db,
-            user_id=str(user.id),
+            user_id=user_id,
             activity_type="login",
             description="User logged in",
             ip_address=str(request.client.host) if request.client else None,
@@ -168,8 +170,8 @@ async def login(
     await db.commit()
 
     return {
-        "access_token": create_access_token(user.id, scopes),
-        "refresh_token": create_refresh_token(user.id),
+        "access_token": create_access_token(user_id, scopes),
+        "refresh_token": create_refresh_token(user_id),
         "token_type": "bearer",
         "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         "user": user
@@ -460,9 +462,8 @@ async def resend_verification(
     )
 
     # Generate and send OTP
-    otp = await generate_otp()
     try:
-        await send_verification_email(
+        otp, _ = await send_verification_email(
             email=user.email,
             name=user.full_name,
             token=verification_token
