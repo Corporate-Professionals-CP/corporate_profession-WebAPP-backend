@@ -36,9 +36,8 @@ def generate_uuid() -> str:
 class UserBase(SQLModel):
     """Base fields shared across all user schemas"""
     full_name: str = Field(..., min_length=2, max_length=100)
-    email: Optional[str] = Field(None, regex=r"^[^@]+@[^@]+\.[^@]+$")
-
-    phone: Optional[str] = Field(None, regex=r"^\+?[\d\s-]{10,15}$")
+    email: Optional[str] = Field(None)
+    phone: Optional[str] = Field(None)
     bio: Optional[str] = Field(
         None, 
         max_length=500,
@@ -179,7 +178,7 @@ class User(UserBase, table=True):
     profile_image_url: Optional[str] = Field(default=None, index=False)
     profile_image_uploaded_at: Optional[datetime] = Field(default=None)
     sex: Gender = Field(default=Gender.PREFER_NOT_TO_SAY)
-    linkedin_profile: Optional[str] = Field(None, regex=r"^https?://(www\.)?linkedin\.com/.*$")
+    linkedin_profile: Optional[str] = Field(None)
     cv_url: Optional[str] = None
     status: Optional[str] = Field(default=None, max_length=255)
     cv_uploaded_at: Optional[datetime] = None

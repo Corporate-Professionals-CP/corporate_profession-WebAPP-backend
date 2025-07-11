@@ -6,21 +6,26 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.exceptions import RequestValidationError
 from app.core.config import settings
 from app.db.database import init_db, async_engine
-from app.api import auth, admin, bookmarks, certification, comments, contacts, directory, education, feed, follow, network, notification, posts, post_media, post_reaction, profiles, skill, skill_catalog, volunteering, work_experiences
+from app.api import auth, admin, analytics, bookmarks, certification, comments, contacts, directory, education, feed, follow, network, notification, posts, post_media, post_reaction, profiles, skill, skill_catalog, volunteering, work_experiences
 from app.core.exceptions import validation_exception_handler, http_exception_handler
 from fastapi.exception_handlers import http_exception_handler as default_http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
 from app.core.exceptions import CustomHTTPException
+from app.utils.analytics_scheduler import start_analytics_scheduler, stop_analytics_scheduler
 
 
 logger = logging.getLogger("uvicorn.error")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup
     await init_db()
+    await start_analytics_scheduler()
     yield
+    # Shutdown
+    await stop_analytics_scheduler()
     await async_engine.dispose()
 
 app = FastAPI(
@@ -88,6 +93,7 @@ api_router.include_router(skill.router, tags=["skill"])
 api_router.include_router(skill_catalog.router, tags=["skills"])
 api_router.include_router(volunteering.router, tags=["volunteering"])
 api_router.include_router(work_experiences.router, tags=["Work Experiences"])
+api_router.include_router(analytics.router, tags=["Analytics"])
 app.include_router(api_router)
 
 def custom_openapi():

@@ -15,7 +15,7 @@ from app.schemas.education import EducationRead
 class UserBase(BaseModel):
     full_name: Optional[str] = Field(..., min_length=2, max_length=100)
     email: Optional[EmailStr] = None
-    phone: Optional[str] = Field(None, pattern=r"^\+?[\d\s-]{10,15}$")
+    phone: Optional[str] = Field(None)
     company: Optional[str] = Field(None, min_length=2, max_length=100)
     job_title: Optional[str] = Field(None, min_length=2, max_length=100)
     bio: Optional[str] = Field(
