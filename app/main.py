@@ -14,17 +14,8 @@ from fastapi.responses import JSONResponse
 from fastapi.requests import Request
 from app.core.exceptions import CustomHTTPException
 
-# Configure logging for the application
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-    ]
-)
 
-logger = logging.getLogger(__name__)
-logger.info("Application starting...")
+logger = logging.getLogger("uvicorn.error")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -94,7 +94,18 @@ def verify_token(token: str, expected_type: Optional[str] = None) -> dict:
         )
 
 async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
-    result = await db.execute(select(User).where(User.id == user_id))
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.skills),
+            selectinload(User.work_experiences),
+            selectinload(User.educations),
+            selectinload(User.certifications),
+            selectinload(User.volunteering_experiences)
+        )
+        .where(User.id == user_id)
+    )
     return result.scalars().first()
 
 async def get_current_user(

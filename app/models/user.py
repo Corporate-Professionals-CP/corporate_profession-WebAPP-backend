@@ -191,6 +191,17 @@ class User(UserBase, table=True):
     is_verified: bool = Field(default=False)
     hashed_password: str
     last_active_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Enhanced admin management fields
+    last_login_at: Optional[datetime] = Field(default=None)
+    login_count: int = Field(default=0)
+    signup_source: str = Field(default="web", max_length=50)
+    notes: Optional[str] = Field(default=None)  # Admin notes
+    warning_count: int = Field(default=0)
+    suspension_reason: Optional[str] = Field(default=None)
+    suspended_at: Optional[datetime] = Field(default=None)
+    suspended_by: Optional[str] = Field(default=None, foreign_key="user.id")
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,

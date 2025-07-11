@@ -36,6 +36,8 @@ from app.core.config import settings
 from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id, get_user_by_email_or_username
 from app.core.email import send_verification_email, send_password_reset_email
 from pydantic import parse_obj_as
+from sqlalchemy.orm.attributes import flag_modified
+from app.core.exceptions import CustomHTTPException
 from app.core.error_codes import (
     EMAIL_NOT_FOUND,
     NOT_AUTHORIZED,
@@ -48,6 +50,10 @@ from app.core.error_codes import (
     MISSING_GOOGLE_EMAIL,
     EMAIL_ALREADY_REGISTERED,
     INVALID_GOOGLE_TOKEN,
+    EMAIL_ALREADY_VERIFIED,
+    FAILED_TO_VERIFY_EMAIL,
+    OTP_EXPIRED,
+    NO_OTP_FOUND,
     GOOGLE_AUTH_FAILED,
     FAILED_TO_VERIFY_EMAIL,
     OTP_EXPIRED,
@@ -55,11 +61,7 @@ from app.core.error_codes import (
     PASSWORD_MUST_NOT_THE_SAME,
     NO_OTP_FOUND,
     INVALID_OTP_FORMAT
-
 )
-
-from sqlalchemy.orm.attributes import flag_modified
-from app.core.exceptions import CustomHTTPException
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -98,6 +100,7 @@ if all([settings.GOOGLE_CLIENT_ID, settings.GOOGLE_CLIENT_SECRET]):
 @router.post("/token", response_model=AuthResponse)
 @router.post("/login", response_model=AuthResponse)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
@@ -141,6 +144,28 @@ async def login(
         scopes.append("recruiter")
     if user.is_admin:
         scopes.append("admin")
+
+    # Update login tracking
+    user.last_login_at = datetime.utcnow()
+    user.login_count += 1
+    user.last_active_at = datetime.utcnow()
+    
+    # Log the login activity
+    try:
+        from app.utils.activity_logger import log_user_activity
+        await log_user_activity(
+            db=db,
+            user_id=str(user.id),
+            activity_type="login",
+            description="User logged in",
+            ip_address=str(request.client.host) if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            metadata={"login_method": "password"}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log login activity: {e}")
+    
+    await db.commit()
 
     return {
         "access_token": create_access_token(user.id, scopes),

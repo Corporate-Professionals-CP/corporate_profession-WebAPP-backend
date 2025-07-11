@@ -113,7 +113,13 @@ async def get_user_by_id(session: AsyncSession, user_id: UUID) -> Optional[User]
     try:
         result = await session.execute(
             select(User)
-            .options(selectinload(User.skills))
+            .options(
+                selectinload(User.skills),
+                selectinload(User.work_experiences),
+                selectinload(User.educations),
+                selectinload(User.certifications),
+                selectinload(User.volunteering_experiences)
+            )
             .where(User.id == str(user_id))
         )
         return result.scalars().first()
@@ -609,102 +615,123 @@ async def delete_user_profile_image(session: AsyncSession, user_id: UUID) -> Non
 
 async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserProfileCompletion:
     """
-    Calculate detailed profile completion stats
+    Calculate detailed profile completion stats with proper relationship loading
     """
-    user = await get_user_by_id(session, user_id)
-    if not user:
-        raise CustomHTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-            error_code=USER_NOT_FOUND
+    try:
+        # Load user with all necessary relationships
+        result = await session.execute(
+            select(User)
+            .options(
+                selectinload(User.skills),
+                selectinload(User.work_experiences),
+                selectinload(User.educations),
+                selectinload(User.certifications),
+                selectinload(User.volunteering_experiences)
+            )
+            .where(User.id == str(user_id))
         )
+        user = result.scalars().first()
+        
+        if not user:
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+                error_code=USER_NOT_FOUND
+            )
 
-    required_fields = {
-        'full_name': 10,
-        'email': 10,
-        'industry': 10,
-        'location': 10,
-        'work_experiences': 5,
-        'job_title': 10,
-        'skills': 10,
-        'education': 10,
-    }
+        # Define field weights (total should be 100)
+        required_fields = {
+            'full_name': 15,
+            'email': 10,
+            'industry': 10,
+            'location': 10,
+            'job_title': 10,
+            'skills': 15,
+            'work_experiences': 15,
+            'educations': 15,
+        }
 
-    optional_fields = {
-        'years_of_experience': 5,
-        'company': 2,
-        'certifications': 2,
-        'linkedin_profile': 5,
-        'cv_url': 5,
-        'company': 2,
-        'volunteering': 2,
-        'bio': 2
-    }
+        optional_fields = {
+            'years_of_experience': 5,
+            'bio': 5,
+            'certifications': 5,
+            'linkedin_profile': 5,
+            'cv_url': 5,
+            'volunteering_experiences': 5,
+            'company': 5,
+        }
 
-    completion = {
-        'total_score': 0,
-        'max_score': 100,
-        'sections': {},
-        'missing_fields': []
-    }
+        completion = {
+            'total_score': 0,
+            'max_score': 100,
+            'sections': {},
+            'missing_fields': []
+        }
 
-    # Check required fields
-    for field, weight in required_fields.items():
-        value = getattr(user, field, None)
-        if field == "skills":
-            # Check if user has skills relationship
-            is_completed = (hasattr(user, 'skills') and user.skills and len(user.skills) > 0)
-        elif field == "work_experiences":
-            # Check if user has work experiences relationship
-            is_completed = (hasattr(user, 'work_experiences') and user.work_experiences and len(user.work_experiences) > 0)
-        elif field == "education":
-            # Check if user has education relationship
-            is_completed = (hasattr(user, 'education') and user.education and len(user.education) > 0)
-        else:
-            is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
-
-        if is_completed:
-            completion['total_score'] += weight
-            completion['sections'][field] = {"completed": True, "weight": weight}
-        else:
-            completion['missing_fields'].append(field)
-            completion['sections'][field] = {"completed": False, "weight": weight}
-
-    # Optional fields - add only if total_score doesn't exceed max_score
-    for field, weight in optional_fields.items():
-        value = getattr(user, field, None)
-        if field == "certifications":
-            # Check if user has certifications relationship
-            is_completed = (hasattr(user, 'certifications') and user.certifications and len(user.certifications) > 0)
-        elif field == "volunteering":
-            # Check if user has volunteering relationship
-            is_completed = (hasattr(user, 'volunteering') and user.volunteering and len(user.volunteering) > 0)
-        else:
-            is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
+        # Check required fields
+        for field, weight in required_fields.items():
+            is_completed = False
             
-        if is_completed:
-            # Only add if it won't push total_score beyond max_score
-            if completion['total_score'] + weight <= completion['max_score']:
-                completion['total_score'] += weight
-                completion['sections'][field] = {"completed": True, "weight": weight}
+            if field == "skills":
+                is_completed = bool(user.skills and len(user.skills) > 0)
+            elif field == "work_experiences":
+                is_completed = bool(user.work_experiences and len(user.work_experiences) > 0)
+            elif field == "educations":
+                is_completed = bool(user.educations and len(user.educations) > 0)
             else:
-                # Mark optional field incomplete if adding it would exceed max_score
-                completion['sections'][field] = {"completed": False, "weight": weight}
-        else:
-            completion['sections'][field] = {"completed": False, "weight": weight}
+                value = getattr(user, field, None)
+                is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
 
-    # Compute percentage
-    percentage = round((completion['total_score'] / completion['max_score']) * 100, 2)
+            if is_completed:
+                completion['total_score'] += weight
+                completion['sections'][field] = {"completed": True, "weight": weight, "type": "required"}
+            else:
+                completion['missing_fields'].append(field)
+                completion['sections'][field] = {"completed": False, "weight": weight, "type": "required"}
 
-    # Cap percentage at 100 to satisfy Pydantic validation
-    if percentage > 100:
-        percentage = 100.0
+        # Check optional fields
+        for field, weight in optional_fields.items():
+            is_completed = False
+            
+            if field == "certifications":
+                is_completed = bool(user.certifications and len(user.certifications) > 0)
+            elif field == "volunteering_experiences":
+                is_completed = bool(user.volunteering_experiences and len(user.volunteering_experiences) > 0)
+            else:
+                value = getattr(user, field, None)
+                is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
+                
+            if is_completed:
+                # Only add if it won't push total_score beyond max_score
+                if completion['total_score'] + weight <= completion['max_score']:
+                    completion['total_score'] += weight
+                    completion['sections'][field] = {"completed": True, "weight": weight, "type": "optional"}
+                else:
+                    completion['sections'][field] = {"completed": False, "weight": weight, "type": "optional"}
+            else:
+                completion['sections'][field] = {"completed": False, "weight": weight, "type": "optional"}
 
-    return UserProfileCompletion(
-        completion_percentage=percentage,
-        missing_fields=completion['missing_fields'],
-        sections=completion['sections']
-    )
+        # Compute percentage
+        percentage = round((completion['total_score'] / completion['max_score']) * 100, 2)
+
+        # Cap percentage at 100 to satisfy Pydantic validation
+        if percentage > 100:
+            percentage = 100.0
+
+        return UserProfileCompletion(
+            completion_percentage=percentage,
+            missing_fields=completion['missing_fields'],
+            sections=completion['sections']
+        )
+        
+    except CustomHTTPException:
+        raise
+    except Exception as e:
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error calculating profile completion",
+            error_code=USER_PROFILE_ERROR
+        )
 
 
 
