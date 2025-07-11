@@ -19,7 +19,7 @@ async def log_user_activity(
     description: Optional[str] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None
+    extra_data: Optional[Dict[str, Any]] = None
 ):
     """
     Log user activity for admin tracking
@@ -31,7 +31,7 @@ async def log_user_activity(
         description: Human readable description
         ip_address: User's IP address
         user_agent: User's browser/app info
-        metadata: Additional data as JSON
+        extra_data: Additional data as JSON
     """
     try:
         activity = UserActivityLog(
@@ -40,7 +40,7 @@ async def log_user_activity(
             activity_description=description,
             ip_address=ip_address,
             user_agent=user_agent,
-            metadata=metadata or {}
+            extra_data=extra_data or {}
         )
         
         db.add(activity)

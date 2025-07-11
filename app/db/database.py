@@ -22,6 +22,10 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Enable SQLAlchemy query logging
+logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+logging.getLogger('sqlalchemy.pool').setLevel(logging.INFO)
+
 # Log environment information
 logger.info(f"Environment: {getattr(settings, 'ENVIRONMENT', 'Unknown')}")
 logger.info(f"Database URL configured: {bool(settings.DATABASE_URL)}")
@@ -29,10 +33,10 @@ logger.info(f"Database URL configured: {bool(settings.DATABASE_URL)}")
 # Use the original DATABASE_URL and modify for asyncpg
 async_engine = create_async_engine(
     str(settings.DATABASE_URL).replace("postgresql://", "postgresql+asyncpg://", 1),
-    echo=True,  # will be False in production
+    echo=True,  # Enable SQL logging for debugging
     future=True,  # Required for SQLModel async support
-    pool_size=20,  # Number of connections to maintain
-    max_overflow=30,  # Additional connections that can be created
+    pool_size=10,  # Reduced pool size
+    max_overflow=15,  # Reduced overflow
     pool_pre_ping=True,  # Verify connections before use
     pool_recycle=3600,  # Recycle connections after 1 hour
     connect_args={

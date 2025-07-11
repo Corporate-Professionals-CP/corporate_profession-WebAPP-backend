@@ -160,7 +160,7 @@ async def login(
             description="User logged in",
             ip_address=str(request.client.host) if request.client else None,
             user_agent=request.headers.get("user-agent"),
-            metadata={"login_method": "password"}
+            extra_data={"login_method": "password"}
         )
     except Exception as e:
         logger.warning(f"Failed to log login activity: {e}")

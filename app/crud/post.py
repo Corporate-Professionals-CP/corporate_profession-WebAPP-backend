@@ -187,14 +187,14 @@ async def get_post_with_user(
         select(Post, User)
         .join(User)
         .where(Post.id == str(post_id))
-        .where(Post.is_active)
+        .where(Post.deleted == False)
     )
     post_user = result.first()
     
     if not post_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found or inactive"
+            detail="Post not found or deleted"
         )
     
     return post_user
@@ -464,7 +464,7 @@ async def delete_post(
 async def get_filtered_posts(
     session: AsyncSession,
     *,
-    is_active: Optional[bool] = None,
+    deleted: Optional[bool] = None,
     industry: Optional[Industry] = None,
     offset: int = 0,
     limit: int = 100
@@ -474,8 +474,8 @@ async def get_filtered_posts(
     """
     query = select(Post).options(selectinload(Post.user))
 
-    if is_active is not None:
-        query = query.where(Post.is_active == is_active)
+    if deleted is not None:
+        query = query.where(Post.deleted == deleted)
     if industry:
         query = query.where(Post.industry == industry)
 
@@ -496,7 +496,7 @@ async def get_feed_posts(
     limit: int = 50,
     exclude_ids: Optional[List[UUID]] = None
 ) -> Tuple[List[Tuple[Post, User]], Optional[str]]:
-    """Enhanced feed algorithm with immediate visibility for new posts"""
+    """Enhanced feed algorithm with immediate visibility for new posts - OPTIMIZED"""
     # Cursor parsing
     cursor_time, cursor_id = None, None
     if cursor:
@@ -513,97 +513,97 @@ async def get_feed_posts(
     very_recent_threshold = datetime.utcnow() - timedelta(minutes=15)
     recent_threshold = datetime.utcnow() - timedelta(hours=6)
 
-    # Get followed users first
+    # Get followed users with a single query - use indexes
     followed_users = await session.execute(
         select(UserFollow.followed_id)
         .where(UserFollow.follower_id == str(current_user.id))
     )
     followed_ids = [str(u[0]) for u in followed_users.all()]
 
-    # Engagement score calculation with NULL protection
+    # Simplified engagement score calculation
     engagement_score = (
-        func.coalesce(Post.engagement["view_count"].astext.cast(Float), 0) * 0.4 +
-        func.coalesce(Post.engagement["bookmark_count"].astext.cast(Float), 0) * 0.6
+        func.coalesce(Post.engagement["view_count"].astext.cast(Float), 0) * 0.3 +
+        func.coalesce(Post.engagement["bookmark_count"].astext.cast(Float), 0) * 0.7
     ).label("engagement_score")
 
+    # Simplified priority scoring
     priority_score = case(
-        # Highest priority: Very recent posts from followed users or matching interests
-        (
-            and_(
-                Post.created_at > very_recent_threshold,
-                or_(
-                    Post.user_id == str(current_user.id),
-                    Post.user_id.in_(followed_ids),
-                    Post.skills.any(Skill.id.in_([s.id for s in current_user.skills])),
-                    and_(
-                        Post.industry == current_user.industry,
-                        Post.visibility.in_(["public", "industry"])
-                    )
-                )
-            ),
-            10000  # Highest priority
-        ),
-        # Medium priority: Recent posts
-        (
-            Post.created_at > recent_threshold,
-            5000 + engagement_score  # Boost recent posts
-        ),
-        else_=engagement_score  # Default to engagement score for older posts
+        # Very recent posts get highest priority
+        (Post.created_at > very_recent_threshold, 10000),
+        # Recent posts get medium priority
+        (Post.created_at > recent_threshold, 5000 + engagement_score),
+        # Older posts ranked by engagement only
+        else_=engagement_score
     ).label("priority_score")
 
-    # Base query conditions
+    # Base query conditions - optimized for indexes
     base_conditions = [
         Post.status == PostStatus.PUBLISHED,
-        Post.is_active == True,
         Post.deleted == False,
+        # Simplified visibility - use index on visibility column
         or_(
-            Post.expires_at.is_(None),
-            Post.expires_at > datetime.utcnow()
-        ),
-        # Visibility conditions
-        or_(
-            Post.visibility == "public",
+            Post.visibility == PostVisibility.PUBLIC,
             and_(
-                Post.visibility == "industry",
+                Post.visibility == PostVisibility.INDUSTRY,
                 Post.industry == current_user.industry
             ),
-            and_(
-                Post.visibility == "followers",
-                Post.user_id.in_(followed_ids)
-            ),
-            Post.user_id == str(current_user.id)  # User can always see their own posts
+            Post.user_id == str(current_user.id)
         )
     ]
+    
+    # Add followed users condition separately for better query planning
+    if followed_ids:
+        base_conditions.append(
+            or_(
+                Post.visibility == PostVisibility.PUBLIC,
+                Post.user_id.in_(followed_ids),
+                Post.user_id == str(current_user.id)
+            )
+        )
     
     if post_type:
         base_conditions.append(Post.post_type == post_type)
     if cutoff_date:
         base_conditions.append(Post.created_at >= cutoff_date)
+    
+    # Pagination cursor
+    if cursor_time and cursor_id:
+        base_conditions.append(
+            or_(
+                Post.created_at < cursor_time,
+                and_(
+                    Post.created_at == cursor_time,
+                    Post.id < cursor_id
+                )
+            )
+        )
 
     # Never exclude very recent posts from feed
     if exclude_ids:
+        # Convert UUID objects to strings for database compatibility
+        exclude_ids_str = [str(uuid_obj) for uuid_obj in exclude_ids]
         base_conditions.append(
             or_(
-                Post.id.not_in(exclude_ids),
+                Post.id.not_in(exclude_ids_str),
                 Post.created_at > very_recent_threshold
             )
         )
 
-    # Build the complete query
+    # Simplified query - let the database optimizer handle it
     query = (
         select(
             Post,
             User,
             priority_score
         )
-        .join(User)
+        .join(User, Post.user_id == User.id)
         .where(and_(*base_conditions))
         .order_by(
             desc("priority_score"),
             desc(Post.created_at),
             desc(Post.id)
         )
-        .limit(limit + 5)  # Get extra for pagination
+        .limit(limit + 1)  # Get one extra for pagination
     )
 
     # Execute query
@@ -615,8 +615,9 @@ async def get_feed_posts(
     if len(posts) > limit:
         last_post = posts[limit - 1][0]
         next_cursor = f"{last_post.created_at.isoformat()},{last_post.id}"
+        posts = posts[:limit]
 
-    return posts[:limit], [], next_cursor
+    return posts, [], next_cursor
 
 async def get_post(
     session: AsyncSession,
@@ -631,16 +632,15 @@ async def get_post(
         .options(selectinload(Post.user))
         .where(Post.deleted == False)
         .where(Post.id == str(post_id))
-        .where(Post.is_active == True)
     )
 
     if current_user:
         # Restrict access based on visibility
         query = query.where(
             or_(
-                Post.visibility == "public",
+                Post.visibility == PostVisibility.PUBLIC,
                 and_(
-                    Post.visibility == "industry",
+                    Post.visibility == PostVisibility.INDUSTRY,
                     Post.industry == current_user.industry
                 ),
                 Post.user_id == str(current_user.id),
@@ -690,7 +690,7 @@ async def get_posts_by_user(
     query = select(Post).where(Post.user_id == str(user_id))  # Convert UUID to string here
 
     if not include_inactive:
-        query = query.where(Post.is_active == True)
+        query = query.where(Post.deleted == False)
 
     query = query.order_by(Post.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(query)
@@ -877,8 +877,6 @@ async def get_multi(
     """Get multiple posts with pagination"""
     query = select(Post).options(selectinload(Post.user))
     
-    if not include_inactive:
-        query = query.where(Post.is_active == True)
     if not include_deleted:
         query = query.where(Post.deleted == False)
         
@@ -976,7 +974,7 @@ async def enrich_multiple_posts(
                 getattr(reactions_breakdown, rtype).has_reacted
                 for rtype in ReactionType
             ),
-            "is_active": post.is_active,
+            "is_active": not post.deleted,  # Use inverse of deleted flag
             "is_repost": post.is_repost,
             "is_quote_repost": getattr(post, 'is_quote_repost', False),
             "reposted_by": user.full_name if post.is_repost else None,
@@ -1020,6 +1018,138 @@ async def enrich_multiple_posts(
         
         enriched.append(PostRead(**enriched_data))
 
+    return enriched
+
+async def enrich_multiple_posts_optimized(
+    db: AsyncSession,
+    posts: List[Post],
+    users: List[User],
+    current_user_id: Optional[str] = None
+) -> List[PostRead]:
+    """
+    Optimized version of enrich_multiple_posts with better bulk queries and caching
+    """
+    if not posts:
+        return []
+    
+    post_ids = [str(post.id) for post in posts]
+    
+    # Single query to get all reaction data
+    reaction_data = await db.execute(
+        select(
+            PostReaction.post_id,
+            PostReaction.type,
+            func.count(PostReaction.user_id).label('count'),
+            func.bool_or(PostReaction.user_id == current_user_id).label('user_reacted')
+        ).where(PostReaction.post_id.in_(post_ids))
+        .group_by(PostReaction.post_id, PostReaction.type)
+    )
+    
+    # Process reaction data into maps
+    reaction_map = {}
+    user_reactions_map = {}
+    
+    for pid, rtype, count, user_reacted in reaction_data.all():
+        reaction_map.setdefault(pid, {})[rtype] = count
+        if user_reacted and current_user_id:
+            user_reactions_map.setdefault(pid, set()).add(rtype)
+    
+    # Single query for comments
+    comment_data = await db.execute(
+        select(PostComment.post_id, func.count(PostComment.id))
+        .where(PostComment.post_id.in_(post_ids))
+        .group_by(PostComment.post_id)
+    )
+    comment_map = {pid: count for pid, count in comment_data.all()}
+    
+    # Single query for bookmarks
+    bookmark_map = {}
+    if current_user_id:
+        bookmark_data = await db.execute(
+            select(Bookmark.post_id, func.count(Bookmark.id))
+            .where(
+                Bookmark.post_id.in_(post_ids),
+                Bookmark.user_id == current_user_id
+            )
+            .group_by(Bookmark.post_id)
+        )
+        bookmark_map = {str(pid): count for pid, count in bookmark_data.all()}
+    
+    # Bulk process original posts for reposts
+    repost_ids = [str(post.original_post_id) for post in posts if post.is_repost and post.original_post_id]
+    original_posts_map = {}
+    
+    if repost_ids:
+        original_posts_result = await db.execute(
+            select(Post, User)
+            .join(User)
+            .where(Post.id.in_(repost_ids))
+        )
+        original_posts_map = {str(post.id): (post, user) for post, user in original_posts_result.all()}
+    
+    from app.schemas.post import ReactionBreakdown, UserReactionStatus
+    from app.models.post_reaction import ReactionType
+    
+    # Assemble enriched posts efficiently
+    enriched = []
+    for post, user in zip(posts, users):
+        post_id_str = str(post.id)
+        
+        # Build reactions breakdown
+        reactions_breakdown = ReactionBreakdown()
+        total_reactions = 0
+        
+        for rtype in ReactionType:
+            count = reaction_map.get(post_id_str, {}).get(rtype, 0)
+            has_reacted = rtype in user_reactions_map.get(post_id_str, set())
+            
+            setattr(reactions_breakdown, rtype, UserReactionStatus(
+                count=count,
+                has_reacted=has_reacted
+            ))
+            
+            total_reactions += count
+        
+        enriched_data = {
+            **post.__dict__,
+            "user": user,
+            "total_comments": comment_map.get(post_id_str, 0),
+            "total_reactions": total_reactions,
+            "is_bookmarked": bookmark_map.get(post_id_str, 0) > 0,
+            "reactions_breakdown": reactions_breakdown,
+            "has_reacted": any(
+                getattr(reactions_breakdown, rtype).has_reacted
+                for rtype in ReactionType
+            ),
+            "is_active": not post.deleted,  # Use inverse of deleted flag
+            "is_repost": post.is_repost,
+            "is_quote_repost": getattr(post, 'is_quote_repost', False),
+            "reposted_by": user.full_name if post.is_repost else None,
+            "bookmark_count": bookmark_map.get(post_id_str, 0)
+        }
+        
+        # Handle repost enrichment more efficiently
+        if post.is_repost and post.original_post_info:
+            enriched_data["original_post_info"] = post.original_post_info
+        elif post.is_repost and post.original_post_id:
+            original_post_data = original_posts_map.get(str(post.original_post_id))
+            if original_post_data:
+                original_post, original_user = original_post_data
+                enriched_data["original_post_info"] = {
+                    "id": original_post.id,
+                    "title": original_post.title,
+                    "content": original_post.content,
+                    "user": {
+                        "id": original_user.id,
+                        "full_name": original_user.full_name,
+                        "email": original_user.email
+                    },
+                    "created_at": original_post.created_at.isoformat(),
+                    "media_urls": original_post.media_url.split(',') if original_post.media_url else []
+                }
+        
+        enriched.append(PostRead(**enriched_data))
+    
     return enriched
 
 async def increment_post_engagement(

@@ -109,18 +109,10 @@ async def create_user(session: AsyncSession, user_data: Union[UserCreate, dict])
 
 
 async def get_user_by_id(session: AsyncSession, user_id: UUID) -> Optional[User]:
-    """Retrieve user by UUID with error handling"""
+    """Retrieve user by UUID with error handling - optimized version"""
     try:
         result = await session.execute(
-            select(User)
-            .options(
-                selectinload(User.skills),
-                selectinload(User.work_experiences),
-                selectinload(User.educations),
-                selectinload(User.certifications),
-                selectinload(User.volunteering_experiences)
-            )
-            .where(User.id == str(user_id))
+            select(User).where(User.id == str(user_id))
         )
         return result.scalars().first()
     except Exception as e:
@@ -615,22 +607,11 @@ async def delete_user_profile_image(session: AsyncSession, user_id: UUID) -> Non
 
 async def get_profile_completion(session: AsyncSession, user_id: UUID) -> UserProfileCompletion:
     """
-    Calculate detailed profile completion stats with proper relationship loading
+    Calculate detailed profile completion stats with optimized relationship loading
     """
     try:
-        # Load user with all necessary relationships
-        result = await session.execute(
-            select(User)
-            .options(
-                selectinload(User.skills),
-                selectinload(User.work_experiences),
-                selectinload(User.educations),
-                selectinload(User.certifications),
-                selectinload(User.volunteering_experiences)
-            )
-            .where(User.id == str(user_id))
-        )
-        user = result.scalars().first()
+        # Use the optimized function that loads relationships only when needed
+        user = await get_user_by_id_with_relationships(session, user_id)
         
         if not user:
             raise CustomHTTPException(
@@ -787,3 +768,25 @@ async def get_multi(
         .limit(limit)
     )
     return result.scalars().all()
+
+async def get_user_by_id_with_relationships(session: AsyncSession, user_id: UUID) -> Optional[User]:
+    """Retrieve user with all relationships loaded - use only when needed"""
+    try:
+        result = await session.execute(
+            select(User)
+            .options(
+                selectinload(User.skills),
+                selectinload(User.work_experiences),
+                selectinload(User.educations),
+                selectinload(User.certifications),
+                selectinload(User.volunteering_experiences)
+            )
+            .where(User.id == str(user_id))
+        )
+        return result.scalars().first()
+    except Exception as e:
+        raise CustomHTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving user with relationships",
+            error_code=USER_NOT_FOUND
+        )

@@ -94,19 +94,25 @@ def verify_token(token: str, expected_type: Optional[str] = None) -> dict:
         )
 
 async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
-    from sqlalchemy.orm import selectinload
+    """Get user by ID - optimized with caching"""
+    from app.utils.cache import user_cache
+    
+    # Try cache first
+    cached_user = user_cache.get(user_id)
+    if cached_user:
+        return cached_user
+    
+    # If not in cache, query database
     result = await db.execute(
-        select(User)
-        .options(
-            selectinload(User.skills),
-            selectinload(User.work_experiences),
-            selectinload(User.educations),
-            selectinload(User.certifications),
-            selectinload(User.volunteering_experiences)
-        )
-        .where(User.id == user_id)
+        select(User).where(User.id == user_id)
     )
-    return result.scalars().first()
+    user = result.scalars().first()
+    
+    # Cache the result if user found
+    if user:
+        user_cache.set(user_id, user)
+    
+    return user
 
 async def get_current_user(
     security_scopes: SecurityScopes,

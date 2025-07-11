@@ -23,7 +23,7 @@ class UserActivityLog(SQLModel, table=True):
     activity_description: Optional[str] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    extra_data: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(TIMESTAMP, server_default=func.now())
@@ -39,7 +39,7 @@ class UserAdminAction(SQLModel, table=True):
     admin_id: str = Field(foreign_key="user.id")
     action_type: str = Field(max_length=50)  # 'suspended', 'activated', 'role_changed', etc.
     reason: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    extra_data: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(TIMESTAMP, server_default=func.now())
