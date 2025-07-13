@@ -6,7 +6,7 @@ from datetime import datetime
 from datetime import date as Date
 from typing import Optional, Dict, Any, List
 from sqlmodel import SQLModel, Field, Column, JSON
-from sqlalchemy import Index
+from sqlalchemy import Index, String
 from enum import Enum
 
 
@@ -134,7 +134,7 @@ class AnalyticsEvent(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: Optional[str] = Field(default=None, foreign_key="user.id", index=True)
-    event_type: AnalyticsEventType = Field(index=True)
+    event_type: AnalyticsEventType = Field(sa_column=Column(String, index=True))
     timestamp: datetime = Field(default_factory=datetime.utcnow, index=True)
     
     # Event metadata

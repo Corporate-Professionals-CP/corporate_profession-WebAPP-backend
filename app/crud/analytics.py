@@ -331,10 +331,43 @@ class AnalyticsService:
         else:
             avg_retention = 0.0
         
+        # Convert cohort_dict to list format as expected by schema
+        cohort_data_list = []
+        for cohort_month, periods in cohort_dict.items():
+            cohort_data_list.append({
+                "cohort_month": str(cohort_month),
+                "periods": periods
+            })
+        
+        # Find best and worst performing cohorts
+        best_cohort = {"cohort_month": "N/A", "avg_retention": 0.0}
+        worst_cohort = {"cohort_month": "N/A", "avg_retention": 100.0}
+        
+        for cohort_month, periods in cohort_dict.items():
+            if periods:
+                avg_cohort_retention = sum(p["retention_rate"] for p in periods) / len(periods)
+                if avg_cohort_retention > best_cohort["avg_retention"]:
+                    best_cohort = {"cohort_month": str(cohort_month), "avg_retention": avg_cohort_retention}
+                if avg_cohort_retention < worst_cohort["avg_retention"]:
+                    worst_cohort = {"cohort_month": str(cohort_month), "avg_retention": avg_cohort_retention}
+        
+        # Generate cohort insights
+        cohort_insights = []
+        if cohorts:
+            cohort_insights.append(f"Analyzed {len(set(c.cohort_month for c in cohorts))} cohorts")
+            cohort_insights.append(f"Average retention rate: {avg_retention:.1f}%")
+            if best_cohort["cohort_month"] != "N/A":
+                cohort_insights.append(f"Best performing cohort: {best_cohort['cohort_month']} ({best_cohort['avg_retention']:.1f}%)")
+        else:
+            cohort_insights.append("No cohort data available")
+        
         return {
-            "cohort_data": dict(cohort_dict),
+            "cohort_data": cohort_data_list,
             "retention_rates": {str(k): [p["retention_rate"] for p in v] for k, v in cohort_dict.items()},
-            "average_retention_rate": avg_retention
+            "average_retention_rate": avg_retention,
+            "best_performing_cohort": best_cohort,
+            "worst_performing_cohort": worst_cohort if worst_cohort["avg_retention"] < 100.0 else {"cohort_month": "N/A", "avg_retention": 0.0},
+            "cohort_insights": cohort_insights
         }
     
     def _get_date_range(self, filters: AnalyticsFilterRequest) -> Tuple[datetime, datetime]:

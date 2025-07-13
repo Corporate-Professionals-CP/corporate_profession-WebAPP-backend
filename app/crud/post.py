@@ -32,6 +32,8 @@ from app.crud.notification import create_notification
 
 logger = logging.getLogger(__name__)
 from app.schemas.enums import NotificationType
+from app.schemas.post import ReactionBreakdown, UserReactionStatus
+from app.models.post_reaction import ReactionType
 from app.crud.post_reaction import get_reactions_for_post
 
 async def create_post(
@@ -465,6 +467,7 @@ async def get_filtered_posts(
     session: AsyncSession,
     *,
     deleted: Optional[bool] = None,
+    is_active: Optional[bool] = None,
     industry: Optional[Industry] = None,
     offset: int = 0,
     limit: int = 100
@@ -474,8 +477,13 @@ async def get_filtered_posts(
     """
     query = select(Post).options(selectinload(Post.user))
 
+    # Handle both deleted and is_active parameters
     if deleted is not None:
         query = query.where(Post.deleted == deleted)
+    elif is_active is not None:
+        # is_active is the inverse of deleted
+        query = query.where(Post.deleted == (not is_active))
+    
     if industry:
         query = query.where(Post.industry == industry)
 
@@ -1086,9 +1094,6 @@ async def enrich_multiple_posts_optimized(
             .where(Post.id.in_(repost_ids))
         )
         original_posts_map = {str(post.id): (post, user) for post, user in original_posts_result.all()}
-    
-    from app.schemas.post import ReactionBreakdown, UserReactionStatus
-    from app.models.post_reaction import ReactionType
     
     # Assemble enriched posts efficiently
     enriched = []

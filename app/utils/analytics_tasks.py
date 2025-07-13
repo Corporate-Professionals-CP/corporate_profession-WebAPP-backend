@@ -569,7 +569,7 @@ class AnalyticsTasksService:
             select(func.count(AnalyticsEvent.id)).where(
                 and_(
                     AnalyticsEvent.user_id == user_id,
-                    AnalyticsEvent.event_type == event_type,
+                    AnalyticsEvent.event_type == event_type.value,
                     AnalyticsEvent.timestamp >= start_time,
                     AnalyticsEvent.timestamp <= end_time
                 )

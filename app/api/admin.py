@@ -271,13 +271,17 @@ async def admin_update_user(
 async def admin_list_posts(
     is_active: Optional[bool] = Query(None),
     industry: Optional[Industry] = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(get_current_active_admin),
 ):
     return await crud_post.get_filtered_posts(
         session=db,
         is_active=is_active,
-        industry=industry
+        industry=industry,
+        offset=offset,
+        limit=limit
     )
 
 @router.patch("/posts/{post_id}/visibility", response_model=PostRead)

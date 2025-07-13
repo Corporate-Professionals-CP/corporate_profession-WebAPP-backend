@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from app.models.post import Post
     from app.models.bookmark import Bookmark
     from app.models.connection import Connection
+    from app.models.reports import Report, UserOffenseLog, UserSafetyStatus
 
 
 def generate_uuid() -> str:
@@ -210,6 +211,36 @@ class User(UserBase, table=True):
     posts: Mapped[List["Post"]] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={'lazy': 'selectin'}
+    )
+
+    # Reports and Safety relationships
+    reports_submitted: List["Report"] = Relationship(
+        back_populates="reporter",
+        sa_relationship_kwargs={
+            "foreign_keys": "[Report.reporter_id]",
+            "lazy": "selectin"
+        }
+    )
+    
+    reports_received: List["Report"] = Relationship(
+        back_populates="reported_user",
+        sa_relationship_kwargs={
+            "foreign_keys": "[Report.reported_user_id]",
+            "lazy": "selectin"
+        }
+    )
+    
+    offense_logs: List["UserOffenseLog"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={
+            "foreign_keys": "[UserOffenseLog.user_id]",
+            "lazy": "selectin"
+        }
+    )
+    
+    safety_status: Optional["UserSafetyStatus"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     profile_completion: float = Field(default=0.0, ge=0.0, le=100.0)
