@@ -240,7 +240,10 @@ class User(UserBase, table=True):
     
     safety_status: Optional["UserSafetyStatus"] = Relationship(
         back_populates="user",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "UserSafetyStatus.user_id"
+        }
     )
 
     profile_completion: float = Field(default=0.0, ge=0.0, le=100.0)

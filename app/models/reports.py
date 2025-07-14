@@ -107,6 +107,17 @@ class Report(SQLModel, table=True):
     escalated_at: Optional[datetime] = Field(default=None)
     escalation_reason: Optional[str] = Field(default=None)
     
+    # Additional content references (merged from old 'report' table)
+    reported_content_id: Optional[str] = Field(default=None)
+    reported_content_type: Optional[str] = Field(default=None)
+    
+    # Admin and appeal management (merged from old 'report' table)
+    admin_notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+    appeal_reason: Optional[str] = Field(default=None, sa_column=Column(Text))
+    appeal_status: Optional[str] = Field(default=None, max_length=12)
+    appeal_resolved_at: Optional[datetime] = Field(default=None)
+    appeal_resolved_by: Optional[str] = Field(default=None, foreign_key="user.id")
+    
     # Metadata
     ip_address: Optional[str] = Field(default=None)
     user_agent: Optional[str] = Field(default=None)
@@ -129,6 +140,15 @@ class Report(SQLModel, table=True):
     )
     resolver: Optional["User"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "Report.resolved_by"}
+    )
+    appeal_resolver: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "Report.appeal_resolved_by"}
+    )
+    
+    # Resolution metrics relationship
+    resolution_metrics: Optional["ReportResolutionMetrics"] = Relationship(
+        back_populates="related_report",
+        sa_relationship_kwargs={"foreign_keys": "ReportResolutionMetrics.report_id"}
     )
     
     # Indexes for performance
@@ -154,6 +174,13 @@ class UserOffenseLog(SQLModel, table=True):
     offense_description: str = Field(sa_column=Column(Text))
     related_report_id: Optional[int] = Field(default=None, foreign_key="reports.id")
     
+    # Additional offense details (merged from old 'useroffenselog' table)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    severity_score: int = Field(default=1)  # Alternative to severity_level
+    evidence_urls: Optional[str] = Field(default=None, sa_column=Column(Text))
+    status: str = Field(default="active", max_length=10)
+    created_by: Optional[str] = Field(default=None, foreign_key="user.id")
+    
     # Action taken
     action_taken: str = Field(sa_column=Column(Text))
     severity_level: int = Field(default=1)  # 1-5 scale
@@ -172,6 +199,12 @@ class UserOffenseLog(SQLModel, table=True):
     appeal_decided_by: Optional[str] = Field(default=None, foreign_key="user.id")
     appeal_decision: Optional[str] = Field(default=None)
     appeal_decided_at: Optional[datetime] = Field(default=None)
+    
+    # Additional appeal fields (merged from old 'useroffenselog' table)
+    appeal_reason: Optional[str] = Field(default=None, sa_column=Column(Text))
+    appeal_status: Optional[str] = Field(default=None, max_length=12)
+    appeal_resolved_at: Optional[datetime] = Field(default=None)
+    appeal_resolved_by: Optional[str] = Field(default=None, foreign_key="user.id")
     
     # Status
     is_active: bool = Field(default=True, index=True)
@@ -192,6 +225,12 @@ class UserOffenseLog(SQLModel, table=True):
     )
     appeal_decided_by_user: Optional["User"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "UserOffenseLog.appeal_decided_by"}
+    )
+    created_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "UserOffenseLog.created_by"}
+    )
+    appeal_resolved_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "UserOffenseLog.appeal_resolved_by"}
     )
     
     # Indexes
@@ -241,9 +280,24 @@ class ReportResolutionMetrics(SQLModel, table=True):
     active_moderators: int = Field(default=0)
     reports_per_moderator: float = Field(default=0.0)
     
+    # Individual report tracking (merged from old 'reportresolutionmetrics' table)
+    report_id: Optional[int] = Field(default=None, foreign_key="reports.id")
+    resolution_time_hours: Optional[float] = Field(default=None)
+    escalation_count: int = Field(default=0)
+    appeal_count: int = Field(default=0)
+    false_positive: bool = Field(default=False)
+    user_satisfaction_score: Optional[int] = Field(default=None)
+    admin_workload_score: Optional[int] = Field(default=None)
+    
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    related_report: Optional["Report"] = Relationship(
+        back_populates="resolution_metrics",
+        sa_relationship_kwargs={"foreign_keys": "ReportResolutionMetrics.report_id"}
+    )
     
     # Indexes
     __table_args__ = (
@@ -263,6 +317,22 @@ class UserSafetyStatus(SQLModel, table=True):
     # Safety scores and flags
     trust_score: float = Field(default=100.0)  # 0-100 scale
     risk_level: str = Field(default="low")  # low, medium, high, critical
+    
+    # Additional safety metrics (merged from old 'usersafetystatus' table)
+    safety_score: Optional[float] = Field(default=100.0)  # Alternative scoring system
+    trust_level: str = Field(default="excellent", max_length=9)
+    total_reports_received: int = Field(default=0)
+    total_reports_submitted: int = Field(default=0)
+    total_offenses: int = Field(default=0)
+    active_warnings: int = Field(default=0)
+    successful_appeals: int = Field(default=0)
+    last_report_at: Optional[datetime] = Field(default=None)
+    restriction_level: int = Field(default=0)
+    is_flagged_for_review: bool = Field(default=False)
+    flagged_reason: Optional[str] = Field(default=None, sa_column=Column(Text))
+    reviewer_notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+    last_reviewed_at: Optional[datetime] = Field(default=None)
+    last_reviewed_by: Optional[str] = Field(default=None, foreign_key="user.id")
     
     # Current restrictions
     is_suspended: bool = Field(default=False, index=True)
@@ -292,7 +362,13 @@ class UserSafetyStatus(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    user: Optional["User"] = Relationship(back_populates="safety_status")
+    user: Optional["User"] = Relationship(
+        back_populates="safety_status",
+        sa_relationship_kwargs={"foreign_keys": "UserSafetyStatus.user_id"}
+    )
+    last_reviewer: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "UserSafetyStatus.last_reviewed_by"}
+    )
     
     # Indexes
     __table_args__ = (
