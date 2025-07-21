@@ -105,6 +105,7 @@ class UserRole(str, Enum):
     """
     STANDARD = "Standard"
     RECRUITER = "Recruiter"
+    MODERATOR = "Moderator"
     ADMIN = "Admin"
 
     @classmethod

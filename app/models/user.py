@@ -188,6 +188,7 @@ class User(UserBase, table=True):
     recruiter_tag: bool = Field(default=False)
     is_active: bool = Field(default=True)
     is_admin: bool = Field(default=False)
+    is_moderator: bool = Field(default=False)
     is_verified: bool = Field(default=False)
     hashed_password: str
     last_active_at: datetime = Field(default_factory=datetime.utcnow)

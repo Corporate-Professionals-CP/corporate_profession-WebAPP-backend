@@ -18,6 +18,7 @@ oauth2_scheme = OAuth2PasswordBearer(
     scopes={
         "user": "Regular user access",
         "recruiter": "Recruiter privileges",
+        "moderator": "Moderator privileges",
         "admin": "Admin privileges"
     }
 )
@@ -161,6 +162,16 @@ async def get_recruiter_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Recruiter privileges required"
+        )
+    return current_user
+
+async def get_moderator_user(
+    current_user: User = Security(get_current_user, scopes=["moderator"])
+) -> User:
+    if not current_user.is_moderator and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Moderator privileges required"
         )
     return current_user
 

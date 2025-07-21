@@ -206,22 +206,14 @@ async def update_profile(
     # Conditionally require profile fields for regular professionals only
     is_professional = not user.recruiter_tag and not current_user.is_admin
     if is_professional:
-        # Check if this is an update for linkedin_profile only
-        is_linkedin_only_update = (
-            len(user_update.dict(exclude_unset=True)) == 1 and 
-            'linkedin_profile' in user_update.dict(exclude_unset=True)
-        )
-        
-        # Skip required field validation if it's just a LinkedIn profile update
-        if not is_linkedin_only_update:
-            required_fields = ["full_name", "job_title", "industry", "location", "years_of_experience"]
-            for field in required_fields:
-                if getattr(user_update, field) is None and getattr(user, field) is None:
-                    raise CustomHTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"{field} is required for professional users",
-                        error_code=REQUIRED_FIELD_MISSING,
-                    )
+        required_fields = ["full_name", "job_title", "industry", "location", "years_of_experience"]
+        for field in required_fields:
+            if getattr(user_update, field) is None and getattr(user, field) is None:
+                raise CustomHTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{field} is required for professional users",
+                    error_code=REQUIRED_FIELD_MISSING,
+                )
 
 
     updated_user = await update_user(db, user_id, user_update, current_user)

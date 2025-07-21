@@ -85,10 +85,10 @@ async def get_reports(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get reports with filtering and pagination (Admin/Moderator only)"""
-    if not current_user.is_admin:
+    if not current_user.is_admin and not current_user.is_moderator:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. Admin privileges required."
+            detail="Access denied. Admin or Moderator privileges required."
         )
     
     try:
@@ -375,10 +375,10 @@ async def resolve_report(
     current_user: User = Depends(get_current_active_user)
 ):
     """Resolve a report (Admin/Moderator only)"""
-    if not current_user.is_admin:
+    if not current_user.is_admin and not current_user.is_moderator:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. Admin privileges required."
+            detail="Access denied. Admin or Moderator privileges required."
         )
     
     try:
@@ -416,10 +416,10 @@ async def escalate_report(
     current_user: User = Depends(get_current_active_user)
 ):
     """Escalate a report (Admin/Moderator only)"""
-    if not current_user.is_admin:
+    if not current_user.is_admin and not current_user.is_moderator:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. Admin privileges required."
+            detail="Access denied. Admin or Moderator privileges required."
         )
     
     try:
