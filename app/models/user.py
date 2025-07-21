@@ -293,3 +293,74 @@ class User(UserBase, table=True):
             "phone": self.phone,
             "linkedin": self.linkedin_profile
         }
+        
+    def update_profile_completion(self):
+        """Update profile completion percentage
+        This method is called after profile updates to recalculate completion percentage
+        """
+        # Define field weights (total should be 100)
+        required_fields = {
+            'full_name': 15,
+            'email': 10,
+            'industry': 10,
+            'location': 10,
+            'job_title': 10,
+            'skills': 15,
+            'work_experiences': 15,
+            'educations': 15,
+        }
+
+        optional_fields = {
+            'years_of_experience': 5,
+            'bio': 5,
+            'certifications': 5,
+            'linkedin_profile': 5,
+            'cv_url': 5,
+            'volunteering_experiences': 5,
+            'company': 5,
+        }
+
+        total_score = 0
+
+        # Check required fields
+        for field, weight in required_fields.items():
+            is_completed = False
+            
+            if field == "skills":
+                is_completed = bool(self.skills and len(self.skills) > 0)
+            elif field == "work_experiences":
+                is_completed = bool(self.work_experiences and len(self.work_experiences) > 0)
+            elif field == "educations":
+                is_completed = bool(self.educations and len(self.educations) > 0)
+            else:
+                value = getattr(self, field, None)
+                is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
+
+            if is_completed:
+                total_score += weight
+
+        # Check optional fields
+        for field, weight in optional_fields.items():
+            is_completed = False
+            
+            if field == "certifications":
+                is_completed = bool(self.certifications and len(self.certifications) > 0)
+            elif field == "volunteering_experiences":
+                is_completed = bool(self.volunteering_experiences and len(self.volunteering_experiences) > 0)
+            else:
+                value = getattr(self, field, None)
+                is_completed = bool(value and (not isinstance(value, str) or value.strip() != ""))
+                
+            if is_completed:
+                # Only add if it won't push total_score beyond max_score
+                if total_score + weight <= 100:
+                    total_score += weight
+
+        # Compute percentage and update the field
+        percentage = round((total_score / 100) * 100, 2)
+
+        # Cap percentage at 100 to satisfy validation
+        if percentage > 100:
+            percentage = 100.0
+            
+        self.profile_completion = percentage
