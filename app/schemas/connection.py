@@ -19,7 +19,9 @@ class ConnectionUser(BaseModel):
     profile_image_url: Optional[str] = None
     avatar_text: Optional[str] = Field(default=None, description="Fallback initials or avatar text")
     recruiter_tag: bool = False
-    created_at: datetime
+    created_at: Optional[datetime] = None
+    connection_status: Optional[str] = Field(default="none", description="Connection status: none, connected, pending_sent, pending_received, rejected")
+    action: Optional[str] = Field(default="connect", description="Available action: connect, cancel, respond, remove")
 
     class Config:
         from_attributes = True

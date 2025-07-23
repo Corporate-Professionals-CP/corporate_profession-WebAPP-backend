@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from fastapi.responses import Response
+from sqlmodel import select
 from app.db.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
+from app.models.connection import Connection
 from app.models.notification import Notification
-from app.schemas.enums import NotificationType
+from app.schemas.enums import NotificationType, ConnectionStatus
 from app.schemas.connection import  ConnectionUser, ConnectionCreate, ConnectionUpdate, ConnectionRead, ConnectionStatsResponse, PotentialConnectionsResponse
 from app.crud.connection import (
     send_connection_request,
@@ -221,34 +223,36 @@ async def get_connection_suggestions(
         connections = await get_my_connections(db, str(current_user.id))
         pending_requests = await get_my_requests(db, str(current_user.id))
 
-        # Get suggested users
-        users = await get_potential_connections(db, str(current_user.id), limit)
-        logger.debug(f"Retrieved {len(users)} potential users from database")
+        # Get suggested users with connection status
+        user_suggestions = await get_potential_connections(db, str(current_user.id), limit)
+        logger.debug(f"Retrieved {len(user_suggestions)} potential users from database")
 
         suggestions = []
-        for idx, user in enumerate(users, 1):
+        for idx, user_data in enumerate(user_suggestions, 1):
             try:
-                logger.debug(f"Processing user {idx}/{len(users)}: {user.id}")
+                logger.debug(f"Processing user {idx}/{len(user_suggestions)}: {user_data['id']}")
 
                 suggestion = ConnectionUser(
-                    id=str(user.id),
-                    full_name=user.full_name,
-                    headline=getattr(user, "headline", None),
-                    location=getattr(user, "location", None),
-                    pronouns=getattr(user, "pronouns", None),
-                    industry=getattr(user, "industry", None),
-                    years_of_experience=getattr(user, "years_of_experience", None),
-                    job_title=getattr(user, "job_title", None),
-                    profile_image_url=getattr(user, "profile_image_url", None),
-                    avatar_text=getattr(user, "avatar_text", None),
-                    recruiter_tag=getattr(user, "recruiter_tag", False),
-                    created_at=user.created_at
+                    id=str(user_data["id"]),
+                    full_name=user_data["full_name"],
+                    headline=user_data.get("headline"),
+                    location=user_data.get("location"),
+                    pronouns=user_data.get("pronouns"),
+                    industry=user_data.get("industry"),
+                    years_of_experience=user_data.get("years_of_experience"),
+                    job_title=user_data.get("job_title"),
+                    profile_image_url=user_data.get("profile_picture_url"),
+                    avatar_text=user_data.get("avatar_text"),
+                    recruiter_tag=user_data.get("recruiter_tag", False),
+                    created_at=user_data.get("created_at"),
+                    connection_status=user_data["connection_status"],
+                    action=user_data["action"]
                 )
                 suggestions.append(suggestion)
-                logger.debug(f"Successfully processed user {user.id}")
+                logger.debug(f"Successfully processed user {user_data['id']}")
 
             except Exception as e:
-                logger.error(f"Failed to process user {user.id}: {str(e)}", exc_info=True)
+                logger.error(f"Failed to process user {user_data.get('id', 'unknown')}: {str(e)}", exc_info=True)
                 continue
 
         logger.info(f"Returning {len(suggestions)} connection suggestions with stats")
@@ -267,6 +271,42 @@ async def get_connection_suggestions(
     except Exception as e:
         logger.error(f"Unexpected error in suggestions endpoint: {str(e)}", exc_info=True)
         raise CustomHTTPException(500, "Failed to fetch connection suggestions")
+
+@router.delete("/cancel/{receiver_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_connection_request(
+    receiver_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Cancel a pending connection request sent by the current user"""
+    try:
+        # Find the pending connection request
+        result = await db.execute(
+            select(Connection).where(
+                Connection.sender_id == current_user.id,
+                Connection.receiver_id == receiver_id,
+                Connection.status == ConnectionStatus.PENDING.value
+            )
+        )
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise CustomHTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No pending connection request found"
+            )
+        
+        # Delete the pending request
+        await db.delete(connection)
+        await db.commit()
+        
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        
+    except CustomHTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to cancel connection request: {str(e)}", exc_info=True)
+        raise CustomHTTPException(500, "Failed to cancel connection request")
 
 @router.delete("/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_connection(

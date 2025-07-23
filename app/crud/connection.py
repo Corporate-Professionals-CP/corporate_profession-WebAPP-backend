@@ -1,5 +1,6 @@
 import logging
 from typing import List
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, or_
 from uuid import UUID
@@ -27,26 +28,60 @@ logger.addHandler(ch)
 
 async def send_connection_request(db: AsyncSession, sender_id: str, receiver_id: str):
     try:
+        # Check for any existing connection between these users (in any direction)
         result = await db.execute(
             select(Connection)
             .options(joinedload(Connection.sender), joinedload(Connection.receiver))
             .where(
-                Connection.sender_id == sender_id,
-                Connection.receiver_id == receiver_id,
-                Connection.status == ConnectionStatus.PENDING.value
+                or_(
+                    # Check if sender already sent request to receiver
+                    (
+                        Connection.sender_id == sender_id,
+                        Connection.receiver_id == receiver_id
+                    ),
+                    # Check if receiver already sent request to sender
+                    (
+                        Connection.sender_id == receiver_id,
+                        Connection.receiver_id == sender_id
+                    )
+                )
             )
         )
 
         existing = result.scalar_one_or_none()
         if existing:
-            return existing
+            # If connection exists in any status, handle appropriately
+            if existing.status == ConnectionStatus.PENDING.value:
+                if existing.sender_id == sender_id:
+                    # User already sent a request
+                    raise CustomHTTPException(400, "Connection request already sent")
+                else:
+                    # The other user sent a request, user should accept/reject instead
+                    raise CustomHTTPException(400, "You have a pending connection request from this user. Please respond to it instead.")
+            elif existing.status == ConnectionStatus.ACCEPTED.value:
+                raise CustomHTTPException(400, "You are already connected with this user")
+            elif existing.status == ConnectionStatus.REJECTED.value:
+                # Allow sending new request if previous was rejected
+                if existing.sender_id == sender_id:
+                    # Update existing rejected request to pending
+                    existing.status = ConnectionStatus.PENDING.value
+                    existing.created_at = datetime.utcnow()
+                    await db.commit()
+                    await db.refresh(existing, attribute_names=["sender", "receiver"])
+                    return existing
+                else:
+                    # Create new request in opposite direction
+                    pass
 
+        # Create new connection request
         conn = Connection(sender_id=sender_id, receiver_id=receiver_id)
         db.add(conn)
         await db.commit()
         await db.refresh(conn)
         await db.refresh(conn, attribute_names=["sender", "receiver"])
         return conn
+    except CustomHTTPException:
+        raise
     except SQLAlchemyError:
         await db.rollback()
         raise CustomHTTPException(500, "Failed to send connection request")
@@ -187,42 +222,112 @@ async def get_pending_sent_requests(db: AsyncSession, user_id: str):
                    f"User ID: {user_id}, Error: {str(e)}", exc_info=True)
         raise CustomHTTPException(500, "Failed to retrieve sent pending connection requests")
 
+async def get_connection_status(db: AsyncSession, user_id: str, other_user_id: str) -> dict:
+    """Get connection status between two users"""
+    try:
+        result = await db.execute(
+            select(Connection).where(
+                or_(
+                    (
+                        (Connection.sender_id == user_id) &
+                        (Connection.receiver_id == other_user_id)
+                    ),
+                    (
+                        (Connection.sender_id == other_user_id) &
+                        (Connection.receiver_id == user_id)
+                    )
+                )
+            ).order_by(Connection.created_at.desc())
+        )
+        
+        connection = result.scalars().first()
+        
+        if not connection:
+            return {
+                "status": "none",
+                "action": "connect",
+                "can_send_request": True
+            }
+        
+        if connection.status == ConnectionStatus.ACCEPTED.value:
+            return {
+                "status": "connected",
+                "action": "remove",
+                "can_send_request": False
+            }
+        elif connection.status == ConnectionStatus.PENDING.value:
+            if connection.sender_id == user_id:
+                # Current user sent the request
+                return {
+                    "status": "pending_sent",
+                    "action": "cancel",
+                    "can_send_request": False
+                }
+            else:
+                # Other user sent the request
+                return {
+                    "status": "pending_received",
+                    "action": "respond",
+                    "can_send_request": False,
+                    "connection_id": str(connection.id)
+                }
+        elif connection.status == ConnectionStatus.REJECTED.value:
+            return {
+                "status": "rejected",
+                "action": "connect",
+                "can_send_request": True
+            }
+        
+        return {
+            "status": "unknown",
+            "action": "connect",
+            "can_send_request": True
+        }
+        
+    except SQLAlchemyError as e:
+        logger.error(f"Database error in get_connection_status: {str(e)}", exc_info=True)
+        raise CustomHTTPException(500, "Failed to get connection status")
+
 async def get_potential_connections(db: AsyncSession, user_id: str, limit: int = 10):
-    """Get random users who are not already connected with the current user"""
+    """Get random users with their connection status relative to current user"""
     try:
         logger.debug(f"Getting potential connections for user {user_id}, limit {limit}")
 
-        # Log the connected users query
-        logger.debug("Building connected users subquery...")
-        connected_users = select(Connection.receiver_id).where(
-            Connection.sender_id == user_id
-        ).union(
-            select(Connection.sender_id).where(
-                Connection.receiver_id == user_id
-            )
-        ).subquery()
-        logger.debug(f"Connected users subquery: {connected_users}")
-
-        # Build and log the main query
+        # Get users excluding current user
         query = (
             select(User)
-            .where(
-                User.id != user_id,
-                ~User.id.in_(connected_users)
-            )
+            .where(User.id != user_id)
             .order_by(func.random())
-            .limit(limit)
+            .limit(limit * 2)  # Get more to filter out connected users
         )
         logger.debug(f"Executing query: {query}")
 
         result = await db.execute(query)
-        users = result.scalars().all()
+        all_users = result.scalars().all()
         
-        logger.debug(f"Found {len(users)} potential connections")
-        if users:
-            logger.debug(f"First potential connection: ID={users[0].id}, Name={users[0].full_name}")
+        # Get connection statuses for all users
+        potential_connections = []
+        for user in all_users:
+            if len(potential_connections) >= limit:
+                break
+                
+            status_info = await get_connection_status(db, user_id, str(user.id))
+            
+            # Include user with their connection status
+            user_dict = {
+                "id": user.id,
+                "full_name": user.full_name,
+                "job_title": user.job_title,
+                "industry": user.industry,
+                "profile_picture_url": user.profile_image_url,
+                "connection_status": status_info["status"],
+                "action": status_info["action"]
+            }
+            potential_connections.append(user_dict)
         
-        return users
+        logger.debug(f"Found {len(potential_connections)} potential connections with status")
+        
+        return potential_connections
         
     except SQLAlchemyError as e:
         logger.error(f"Database error in get_potential_connections: {str(e)}", exc_info=True)
