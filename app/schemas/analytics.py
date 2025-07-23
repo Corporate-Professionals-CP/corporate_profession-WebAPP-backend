@@ -93,6 +93,18 @@ class ContentAnalyticsResponse(BaseModel):
     engagement_by_post_type: Dict[str, Dict[str, float]]
 
 
+class JobPostingMetricsResponse(BaseModel):
+    """Job posting metrics response"""
+    total_job_postings: int
+    active_job_postings: int
+    average_applications_per_job: float
+    top_job_categories: List[Dict[str, Any]]
+    job_posting_trends: Dict[str, List[Any]]
+    application_conversion_rate: float
+    time_to_fill: int
+    generated_at: datetime
+
+
 class GrowthHeatmapResponse(BaseModel):
     """Growth heatmap response"""
     geographic_usage: Dict[str, Dict[str, Any]]  # country -> metrics

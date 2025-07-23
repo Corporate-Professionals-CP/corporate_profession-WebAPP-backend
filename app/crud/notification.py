@@ -4,8 +4,10 @@ from app.models.notification import Notification
 from sqlalchemy import select, func
 from app.core.ws_manager import manager
 from sqlalchemy.orm import selectinload
-from app.crud.user import generate_avatar_fallback
+from app.crud.user import generate_avatar_fallback, get_user
 from typing import Union, Dict, Any
+from datetime import datetime
+from app.core.email import send_notification_email, should_send_email_notification
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,7 @@ async def create_notification(
     notification_data: Union[Dict[str, Any], Notification]
 ) -> Notification:
     """
-    Creates a notification and sends it via WebSocket.
+    Creates a notification and sends it via WebSocket and email (if enabled).
     Handles both dictionary input and Notification object input.
     
     Args:
@@ -86,6 +88,40 @@ async def create_notification(
                 "change": "+1"  # Indicates increment
             }
         )
+        
+        # Send email notification if enabled for this user and notification type
+        try:
+            # Get recipient user
+            recipient = await get_user(db, notification.recipient_id)
+            if recipient:
+                # Get actor user if available
+                actor_name = None
+                post_content = None
+                
+                if notification.actor_id:
+                    actor = await get_user(db, notification.actor_id)
+                    if actor:
+                        actor_name = actor.full_name
+                
+                # Get post content if available
+                if notification.post_id and hasattr(notification, 'post') and notification.post:
+                    post_content = notification.post.content
+                
+                # Check if user wants email notifications for this type
+                if should_send_email_notification(notification.type, recipient.profile_preferences):
+                    # Send email notification
+                    await send_notification_email(
+                        recipient_email=recipient.email,
+                        recipient_name=recipient.full_name,
+                        notification_type=notification.type,
+                        actor_name=actor_name,
+                        message=notification.message,
+                        post_content=post_content
+                    )
+                    logger.info(f"Email notification sent to {recipient.email} for {notification.type}")
+        except Exception as email_error:
+            logger.error(f"Failed to send email notification: {email_error}")
+            # Continue even if email notification fails
 
         return notification
 

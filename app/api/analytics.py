@@ -29,7 +29,8 @@ from app.schemas.analytics import (
     CustomReportRequest,
     CustomReportResponse,
     AnalyticsFilterRequest,
-    TimeRange
+    TimeRange,
+    JobPostingMetricsResponse
 )
 from app.models.analytics import AnalyticsEventType
 
@@ -37,6 +38,52 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
+
+@router.get("/job-posting-metrics", response_model=JobPostingMetricsResponse)
+async def get_job_posting_metrics(
+    time_range: TimeRange = Query(TimeRange.LAST_30_DAYS),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    industries: Optional[List[str]] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get job posting metrics and analytics"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Admin privileges required."
+        )
+    
+    try:
+        analytics_service = AnalyticsService(db)
+        filters = AnalyticsFilterRequest(
+            time_range=time_range,
+            start_date=start_date,
+            end_date=end_date,
+            industries=industries
+        )
+        
+        # Get job posting metrics
+        job_metrics = await analytics_service.get_job_posting_metrics(filters)
+        
+        return {
+            "total_job_postings": job_metrics.get("total_job_postings", 0),
+            "active_job_postings": job_metrics.get("active_job_postings", 0),
+            "average_applications_per_job": job_metrics.get("average_applications_per_job", 0),
+            "top_job_categories": job_metrics.get("top_job_categories", []),
+            "job_posting_trends": job_metrics.get("job_posting_trends", {}),
+            "application_conversion_rate": job_metrics.get("application_conversion_rate", 0),
+            "time_to_fill": job_metrics.get("time_to_fill", 0),
+            "generated_at": datetime.utcnow()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching job posting metrics: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch job posting metrics"
+        )
 
 @router.get("/dashboard", response_model=AnalyticsDashboardResponse)
 async def get_analytics_dashboard(

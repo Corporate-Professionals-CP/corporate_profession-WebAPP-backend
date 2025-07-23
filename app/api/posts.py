@@ -59,31 +59,24 @@ async def create_new_post(
     Any user can create posts, with optional media attachments
     
     Post Types:
-    - job: Job opportunities (must include industry tag)
+    - job: Job opportunities (all fields optional except content)
     - announcement: Professional announcements
     - update: Career updates
     
     Required Fields:
-    - title: 5-100 characters
     - content: 10-2000 characters
     - post_type: One of [job, announcement, update]
-    - industry: Required for job posts
-    - job_title: Required for job posts
+    
+    Optional Fields for Job Posts:
+    - title: Job title
+    - industry: Industry category
+    - job_title: Specific job title
+    - skills: Required skills
+    - expires_at: Expiration date (defaults to 30 days if not provided)
     """
 
-    if post_in.post_type == PostType.JOB_POSTING:
-        if not post_in.job_title:
-            raise CustomHTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Job posts require a job title",
-                    error_code=INVALID_POST_DATA
-                )
-        if not post_in.skills:
-            raise CustomHTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Job posts require at least one skill",
-                    error_code=INVALID_POST_DATA
-                )
+    # Reduced validation for job posts - only basic content validation remains
+    # job_title, skills, and industry are now optional for easier posting
 
     return await create_post(db, post_in, current_user)
 

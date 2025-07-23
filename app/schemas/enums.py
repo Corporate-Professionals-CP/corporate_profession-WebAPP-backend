@@ -126,6 +126,17 @@ class ContactType(str, Enum):
     CUSTOM = "custom"
 
     @classmethod
+    def _missing_(cls, value):
+        # Handle case-insensitive lookup
+        if isinstance(value, str):
+            # Convert input to lowercase and compare with lowercase enum values
+            value = value.lower()
+            for member in cls:
+                if member.value.lower() == value:
+                    return member
+        return None
+
+    @classmethod
     def list(cls):
         return [item.value for item in cls]
 

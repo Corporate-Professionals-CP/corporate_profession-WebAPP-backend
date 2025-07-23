@@ -126,6 +126,10 @@ async def get(session: AsyncSession, user_id: UUID) -> Optional[User]:
     """Get user by ID (alias for get_user_by_id)"""
     return await get_user_by_id(session, user_id)
 
+async def get_user(session: AsyncSession, user_id: UUID) -> Optional[User]:
+    """Get user by ID (alias for get_user_by_id)"""
+    return await get_user_by_id(session, user_id)
+
 async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]:
     """Case-insensitive email lookup with error handling"""
     try:

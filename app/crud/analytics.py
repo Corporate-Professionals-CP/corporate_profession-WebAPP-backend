@@ -6,8 +6,9 @@ import logging
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, desc, asc, case, extract, distinct
+from sqlalchemy import select, func, and_, or_, desc, asc, case, extract, distinct, text
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.expression import literal_column
 from collections import defaultdict
 
 from app.models.analytics import (
@@ -16,10 +17,10 @@ from app.models.analytics import (
 )
 from app.models.user import User
 from app.models.post import Post
-from app.models.connection import Connection
+from app.models.connection import Connection, ConnectionStatus
 from app.models.post_comment import PostComment
 from app.models.post_reaction import PostReaction
-from app.schemas.analytics import TimeRange, AnalyticsFilterRequest
+from app.schemas.analytics import TimeRange, AnalyticsFilterRequest, MetricTrend
 from app.schemas.enums import Industry, PostType
 
 logger = logging.getLogger(__name__)
@@ -300,6 +301,57 @@ class AnalyticsService:
             "activation_by_signup_source": await self._get_activation_by_signup_source(users)
         }
     
+    async def get_job_posting_metrics(
+        self,
+        filters: AnalyticsFilterRequest
+    ) -> Dict[str, Any]:
+        """Get job posting metrics and analytics"""
+        start_date, end_date = self._get_date_range(filters)
+        
+        # Total job postings in the period
+        total_job_postings = await self.db.scalar(
+            select(func.count(Post.id)).where(
+                and_(
+                    Post.post_type == PostType.JOB_POSTING.value,
+                    Post.created_at >= start_date,
+                    Post.created_at <= end_date,
+                    Post.deleted == False
+                )
+            )
+        )
+        
+        # Active job postings (not expired)
+        active_job_postings = await self.db.scalar(
+            select(func.count(Post.id)).where(
+                and_(
+                    Post.post_type == PostType.JOB_POSTING.value,
+                    Post.created_at >= start_date,
+                    Post.created_at <= end_date,
+                    Post.deleted == False,
+                    or_(
+                        Post.expires_at > datetime.utcnow(),
+                        Post.expires_at == None
+                    )
+                )
+            )
+        )
+        
+        # Job posting trends over time
+        job_posting_trends = await self._get_job_posting_trends(start_date, end_date)
+        
+        # Top job categories/industries
+        top_job_categories = await self._get_top_job_industries(start_date, end_date)
+        
+        return {
+            "total_job_postings": total_job_postings or 0,
+            "active_job_postings": active_job_postings or 0,
+            "average_applications_per_job": 0,  # Placeholder for future implementation
+            "top_job_categories": top_job_categories,
+            "job_posting_trends": job_posting_trends,
+            "application_conversion_rate": 0.0,  # Placeholder for future implementation
+            "time_to_fill": 0  # Placeholder for future implementation
+        }
+        
     async def get_cohort_analysis(
         self,
         filters: AnalyticsFilterRequest
@@ -395,6 +447,104 @@ class AnalyticsService:
             start_date = end_date - timedelta(days=30)  # Default to 30 days
         
         return start_date, end_date
+        
+    async def _get_job_posting_trends(self, start_date: datetime, end_date: datetime) -> Dict[str, List[int]]:
+        """Get job posting trends over the specified time period"""
+        # Calculate the number of days in the period
+        days_in_period = (end_date - start_date).days + 1
+        
+        # Determine the appropriate interval based on the period length
+        if days_in_period <= 7:
+            # Daily for short periods
+            interval = 'day'
+            format_str = '%Y-%m-%d'
+            delta = timedelta(days=1)
+        elif days_in_period <= 31:
+            # Weekly for medium periods
+            interval = 'week'
+            format_str = '%Y-%U'
+            delta = timedelta(weeks=1)
+        else:
+            # Monthly for longer periods
+            interval = 'month'
+            format_str = '%Y-%m'
+            delta = timedelta(days=30)
+        
+        # Query to get job postings grouped by the interval
+        if interval == 'day':
+            date_trunc_expr = func.date_trunc('day', Post.created_at)
+        elif interval == 'week':
+            date_trunc_expr = func.date_trunc('week', Post.created_at)
+        else:  # month
+            date_trunc_expr = func.date_trunc('month', Post.created_at)
+        
+        query = select(
+            date_trunc_expr.label('interval_date'),
+            func.count(Post.id).label('count')
+        ).where(
+            and_(
+                Post.post_type == PostType.JOB_POSTING.value,
+                Post.created_at >= start_date,
+                Post.created_at <= end_date,
+                Post.deleted == False
+            )
+        ).group_by('interval_date').order_by('interval_date')
+        
+        result = await self.db.execute(query)
+        job_counts_by_interval = {row.interval_date.strftime(format_str): row.count for row in result.all()}
+        
+        # Create a complete series with zeros for missing intervals
+        trends = []
+        labels = []
+        current_date = start_date
+        
+        while current_date <= end_date:
+            interval_key = current_date.strftime(format_str)
+            labels.append(interval_key)
+            trends.append(job_counts_by_interval.get(interval_key, 0))
+            
+            if interval == 'day':
+                current_date += timedelta(days=1)
+            elif interval == 'week':
+                current_date += timedelta(weeks=1)
+            else:  # month
+                # Move to the first day of the next month
+                if current_date.month == 12:
+                    current_date = datetime(current_date.year + 1, 1, 1)
+                else:
+                    current_date = datetime(current_date.year, current_date.month + 1, 1)
+        
+        return {
+            "labels": labels,
+            "data": trends
+        }
+    
+    async def _get_top_job_industries(self, start_date: datetime, end_date: datetime, limit: int = 5) -> List[Dict[str, Any]]:
+        """Get top industries for job postings"""
+        query = select(
+            Post.industry,
+            func.count(Post.id).label('count')
+        ).where(
+            and_(
+                Post.post_type == PostType.JOB_POSTING.value,
+                Post.created_at >= start_date,
+                Post.created_at <= end_date,
+                Post.deleted == False,
+                Post.industry != None
+            )
+        ).group_by(Post.industry).order_by(desc('count')).limit(limit)
+        
+        result = await self.db.execute(query)
+        top_industries = []
+        
+        for row in result.all():
+            if row.industry:  # Ensure industry is not None
+                top_industries.append({
+                    "industry": row.industry,
+                    "count": row.count
+                })
+        
+        return top_industries
     
     async def _get_signup_trend(self, start_date: datetime, end_date: datetime) -> List[Dict]:
         """Get signup trend data"""

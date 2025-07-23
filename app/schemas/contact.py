@@ -1,5 +1,5 @@
 from pydantic import BaseModel, HttpUrl, validator
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 from app.schemas.enums import ContactType
 
@@ -7,7 +7,7 @@ class ContactCreate(BaseModel):
     type: ContactType
     platform_name: Optional[str] = None
     username: Optional[str] = None
-    url: HttpUrl
+    url:  Optional[Union[str, HttpUrl]] = None
 
     @validator('url', pre=True)
     def convert_httpurl_to_str(cls, v):
@@ -18,7 +18,7 @@ class ContactCreate(BaseModel):
 class ContactUpdate(BaseModel):
     platform_name: Optional[str]
     username: Optional[str]
-    url: Optional[HttpUrl]
+    url:  Optional[Union[str, HttpUrl]] = None
 
     @validator('url', pre=True)
     def convert_httpurl_to_str(cls, v):
@@ -31,7 +31,7 @@ class ContactRead(BaseModel):
     type: ContactType
     platform_name: Optional[str]
     username: Optional[str]
-    url: HttpUrl
+    url:  Optional[Union[str, HttpUrl]] = None
     created_at: datetime
 
     @validator('url', pre=True)

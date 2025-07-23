@@ -73,14 +73,11 @@ async def create_post(
             "media_type": media_type
         })
 
-        # Handle job post validations
+        # Handle job post defaults (reduced validation)
         if post_data.post_type == PostType.JOB_POSTING:
-            if not post_data.industry:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Job posts must specify an industry"
-                )
-            post_dict.setdefault("expires_at", datetime.utcnow() + timedelta(days=30))
+            # Set default expiration if not provided (30 days from now)
+            if not post_data.expires_at:
+                post_dict.setdefault("expires_at", datetime.utcnow() + timedelta(days=30))
 
         # Resolve skills first
         resolved_skills = await _resolve_skills(session, post_data.skills)

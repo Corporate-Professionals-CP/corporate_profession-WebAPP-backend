@@ -38,12 +38,10 @@ class PostCreate(PostBase):
     """Schema for post creation requests"""
     @validator('expires_at')
     def validate_expires_at(cls, v, values):
-        if values.get('post_type') == PostType.JOB_POSTING:
-            if v is None:
-                raise ValueError("Job posts must have an expiration date")
-            if v <= datetime.utcnow(): 
-                raise ValueError("Expiration date must be in the future")
-            return v
+        # Only validate if expiration date is provided
+        if v is not None and v <= datetime.utcnow(): 
+            raise ValueError("Expiration date must be in the future")
+        return v
 
 class PostUpdate(BaseModel):
     """Schema for post updates (all fields optional)"""
