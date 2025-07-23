@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Connection Request</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+            padding: 30px 40px;
+            text-align: center;
+        }
+        .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0;
+        }
+        .content {
+            padding: 40px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+        .message {
+            color: #4a5568;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .connection-card {
+            background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+            border: 2px solid #3182ce;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .connection-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .requester-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2a4365;
+            margin-bottom: 10px;
+        }
+        .connection-action {
+            color: #2c5282;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+        .connection-message {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-top: 15px;
+            font-style: italic;
+            color: #4a5568;
+        }
+        .cta-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 25px 0;
+            flex-wrap: wrap;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 15px 25px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+            min-width: 120px;
+            text-align: center;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .accept-button {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: #ffffff;
+        }
+        .view-button {
+            background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+            color: #ffffff;
+        }
+        .network-benefits {
+            background-color: #f7fafc;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .benefits-title {
+            color: #4a5568;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .benefits-icon {
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        .stats-container {
+            background-color: #ebf8ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .stats-title {
+            color: #2c5282;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        .stats-grid {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            text-align: center;
+            margin: 10px;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3182ce;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .footer {
+            background-color: #2d3748;
+            color: #a0aec0;
+            padding: 30px 40px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .footer-links {
+            margin-top: 20px;
+        }
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            .header, .content, .footer {
+                padding: 20px !important;
+            }
+            .logo {
+                font-size: 24px;
+            }
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            .stats-grid {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1 class="logo">Corporate Professionals</h1>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                Hello <strong>{{ recipient_name }}</strong>! 🤝
+            </div>
+            
+            <div class="message">
+                Exciting news! You have a new connection request on Corporate Professionals. Someone wants to expand their professional network with you!
+            </div>
+            
+            <div class="connection-card">
+                <div class="connection-icon">🔗</div>
+                <div class="requester-name">{{ actor_name }}</div>
+                <div class="connection-action">wants to connect with you</div>
+                
+                {% if message %}
+                <div class="connection-message">
+                    <strong>Personal message:</strong><br>
+                    "{{ message }}"
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="message">
+                Building professional connections opens doors to new opportunities, collaborations, and industry insights.
+            </div>
+            
+            <div class="cta-buttons">
+                <a href="{{ connections_url }}" class="cta-button accept-button">Accept Request</a>
+                <a href="{{ connections_url }}" class="cta-button view-button">View Profile</a>
+            </div>
+            
+            <div class="stats-container">
+                <div class="stats-title">Your Growing Network</div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number">+1</div>
+                        <div class="stat-label">New Request</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">🌐</div>
+                        <div class="stat-label">Global Reach</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">💼</div>
+                        <div class="stat-label">Professional Growth</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="network-benefits">
+                <div class="benefits-title">
+                    <span class="benefits-icon">💡</span>
+                    Benefits of Professional Connections
+                </div>
+                <ul style="color: #4a5568; margin-left: 20px; margin-bottom: 0;">
+                    <li>Access to industry insights and trends</li>
+                    <li>Potential collaboration opportunities</li>
+                    <li>Career advancement possibilities</li>
+                    <li>Knowledge sharing and learning</li>
+                    <li>Referrals and recommendations</li>
+                </ul>
+            </div>
+            
+            <div class="message">
+                <strong>Connection best practices:</strong>
+                <ul style="color: #4a5568; margin-left: 20px;">
+                    <li>Review their profile before accepting</li>
+                    <li>Send a welcome message after connecting</li>
+                    <li>Engage with their content regularly</li>
+                    <li>Offer help and value to your network</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Best regards,<br><strong>Corporate Professionals Team</strong></p>
+            <div class="footer-links">
+                <a href="{{ frontend_url }}/connections">My Connections</a>
+                <a href="{{ frontend_url }}/network">Network</a>
+                <a href="{{ frontend_url }}/settings">Settings</a>
+            </div>
+            <p style="margin-top: 20px; font-size: 12px; color: #718096;">
+                © 2024 Corporate Professionals. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

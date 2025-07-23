@@ -6,6 +6,7 @@ import string
 from fastapi import HTTPException, status
 from app.core.config import settings
 from app.schemas.enums import NotificationType
+from app.utils.template_loader import template_loader
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -44,12 +45,14 @@ async def send_verification_email(email: str, name: str, token: str) -> None:
     # Store the OTP in the user's record (we'll use profile_preferences field)
     # This is a temporary solution - in production, consider a dedicated OTP storage
     
-    text = f"Hello {name},\n\nYour verification code is: {otp}\n\nEnter this code to verify your email."
-    html = f"""
-        <h3>Hello {name},</h3>
-        <p>Your verification code is: <strong>{otp}</strong></p>
-        <p>Enter this code to verify your email.</p>
-    """
+    context = {
+        "name": name,
+        "otp": otp,
+        "frontend_url": settings.FRONTEND_URL
+    }
+    
+    html = template_loader.render_template("verification_email", context)
+    text = template_loader.get_text_version(html)
     
     # We'll return the OTP to store it in the user record
     return otp, await _send_email_resend(email, name, subject, text, html)
@@ -59,12 +62,14 @@ async def send_password_reset_email(email: str, name: str) -> str:
     subject = "Password Reset OTP"
     otp = await generate_otp()
 
-    text = f"Hello {name},\n\nYour password reset OTP is: {otp}\n\nEnter this code to reset your password."
-    html = f"""
-        <h3>Hello {name},</h3>
-        <p>Your password reset OTP is: <strong>{otp}</strong></p>
-        <p>Enter this code to reset your password.</p>
-    """
+    context = {
+        "name": name,
+        "otp": otp,
+        "frontend_url": settings.FRONTEND_URL
+    }
+    
+    html = template_loader.render_template("password_reset", context)
+    text = template_loader.get_text_version(html)
 
     await _send_email_resend(email, name, subject, text, html)
     return otp
@@ -119,89 +124,27 @@ def should_send_email_notification(notification_type: NotificationType, user_pre
     return False
 
 
-# Notification email templates
-NOTIFICATION_TEMPLATES = {
+# Email template mapping for notifications
+NOTIFICATION_TEMPLATE_MAP = {
     NotificationType.NEW_FOLLOWER: {
-        "subject": "New Follower on Corporate Professionals",
-        "text": "Hello {recipient_name},\n\n{actor_name} started following you on Corporate Professionals.\n\nView your profile: {profile_url}\n\nBest regards,\nCorporate Professionals Team",
-        "html": """
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">New Follower!</h2>
-            <p>Hello <strong>{recipient_name}</strong>,</p>
-            <p><strong>{actor_name}</strong> started following you on Corporate Professionals.</p>
-            <div style="margin: 20px 0;">
-                <a href="{profile_url}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Your Profile</a>
-            </div>
-            <p>Best regards,<br>Corporate Professionals Team</p>
-        </div>
-        """
+        "template": "new_follower",
+        "subject": "New Follower on Corporate Professionals"
     },
     NotificationType.POST_COMMENT: {
-        "subject": "New Comment on Your Post",
-        "text": "Hello {recipient_name},\n\n{actor_name} commented on your post: \"{post_content}\"\n\nComment: {message}\n\nView post: {post_url}\n\nBest regards,\nCorporate Professionals Team",
-        "html": """
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">New Comment on Your Post</h2>
-            <p>Hello <strong>{recipient_name}</strong>,</p>
-            <p><strong>{actor_name}</strong> commented on your post:</p>
-            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; margin: 15px 0;">
-                <p style="margin: 0; font-style: italic;">\"{post_content}\"</p>
-            </div>
-            <p><strong>Comment:</strong> {message}</p>
-            <div style="margin: 20px 0;">
-                <a href="{post_url}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Post</a>
-            </div>
-            <p>Best regards,<br>Corporate Professionals Team</p>
-        </div>
-        """
+        "template": "post_comment",
+        "subject": "New Comment on Your Post"
     },
     NotificationType.POST_REACTION: {
-        "subject": "Someone Reacted to Your Post",
-        "text": "Hello {recipient_name},\n\n{actor_name} reacted to your post: \"{post_content}\"\n\nView post: {post_url}\n\nBest regards,\nCorporate Professionals Team",
-        "html": """
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">New Reaction on Your Post</h2>
-            <p>Hello <strong>{recipient_name}</strong>,</p>
-            <p><strong>{actor_name}</strong> reacted to your post:</p>
-            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; margin: 15px 0;">
-                <p style="margin: 0; font-style: italic;">\"{post_content}\"</p>
-            </div>
-            <div style="margin: 20px 0;">
-                <a href="{post_url}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Post</a>
-            </div>
-            <p>Best regards,<br>Corporate Professionals Team</p>
-        </div>
-        """
+        "template": "post_reaction",
+        "subject": "Someone Reacted to Your Post"
     },
     NotificationType.CONNECTION_REQUEST: {
-        "subject": "New Connection Request",
-        "text": "Hello {recipient_name},\n\n{actor_name} sent you a connection request on Corporate Professionals.\n\nView request: {connections_url}\n\nBest regards,\nCorporate Professionals Team",
-        "html": """
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">New Connection Request</h2>
-            <p>Hello <strong>{recipient_name}</strong>,</p>
-            <p><strong>{actor_name}</strong> sent you a connection request on Corporate Professionals.</p>
-            <div style="margin: 20px 0;">
-                <a href="{connections_url}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Request</a>
-            </div>
-            <p>Best regards,<br>Corporate Professionals Team</p>
-        </div>
-        """
+        "template": "connection_request",
+        "subject": "New Connection Request"
     },
     NotificationType.CONNECTION_ACCEPTED: {
-        "subject": "Connection Request Accepted",
-        "text": "Hello {recipient_name},\n\n{actor_name} accepted your connection request on Corporate Professionals.\n\nView connections: {connections_url}\n\nBest regards,\nCorporate Professionals Team",
-        "html": """
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Connection Request Accepted</h2>
-            <p>Hello <strong>{recipient_name}</strong>,</p>
-            <p><strong>{actor_name}</strong> accepted your connection request on Corporate Professionals.</p>
-            <div style="margin: 20px 0;">
-                <a href="{connections_url}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Connections</a>
-            </div>
-            <p>Best regards,<br>Corporate Professionals Team</p>
-        </div>
-        """
+        "template": "connection_accepted",
+        "subject": "Connection Request Accepted"
     }
 }
 
@@ -217,14 +160,16 @@ async def send_notification_email(
 ) -> None:
     """Send notification email based on notification type"""
     try:
-        if notification_type not in NOTIFICATION_TEMPLATES:
+        if notification_type not in NOTIFICATION_TEMPLATE_MAP:
             logger.warning(f"No email template found for notification type: {notification_type}")
             return
 
-        template = NOTIFICATION_TEMPLATES[notification_type]
+        template_config = NOTIFICATION_TEMPLATE_MAP[notification_type]
+        template_name = template_config["template"]
+        subject = template_config["subject"]
         
-        # Prepare template variables
-        template_vars = {
+        # Prepare template context
+        context = {
             "recipient_name": recipient_name,
             "actor_name": actor_name or "Someone",
             "message": message or "",
@@ -232,13 +177,13 @@ async def send_notification_email(
             "profile_url": f"{settings.FRONTEND_URL}/profile",
             "post_url": f"{settings.FRONTEND_URL}/posts",
             "connections_url": f"{settings.FRONTEND_URL}/connections",
+            "frontend_url": settings.FRONTEND_URL,
             **kwargs
         }
         
-        # Format template strings
-        subject = template["subject"].format(**template_vars)
-        text = template["text"].format(**template_vars)
-        html = template["html"].format(**template_vars)
+        # Render template
+        html = template_loader.render_template(template_name, context)
+        text = template_loader.get_text_version(html)
         
         await _send_email_resend(recipient_email, recipient_name, subject, text, html)
         logger.info(f"Notification email sent to {recipient_email} for {notification_type}")

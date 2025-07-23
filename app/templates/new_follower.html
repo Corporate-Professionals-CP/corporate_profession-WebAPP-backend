@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Follower</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #38b2ac 0%, #319795 100%);
+            padding: 30px 40px;
+            text-align: center;
+        }
+        .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0;
+        }
+        .content {
+            padding: 40px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+        .message {
+            color: #4a5568;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .follower-card {
+            background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%);
+            border: 2px solid #38b2ac;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        .follower-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .follower-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #234e52;
+            margin-bottom: 10px;
+        }
+        .follower-action {
+            color: #2c7a7b;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #38b2ac 0%, #319795 100%);
+            color: #ffffff;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            transition: transform 0.2s ease;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .stats-container {
+            background-color: #f7fafc;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .stats-title {
+            color: #4a5568;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        .stats-grid {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            text-align: center;
+            margin: 10px;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #38b2ac;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .footer {
+            background-color: #2d3748;
+            color: #a0aec0;
+            padding: 30px 40px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .footer-links {
+            margin-top: 20px;
+        }
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            .header, .content, .footer {
+                padding: 20px !important;
+            }
+            .logo {
+                font-size: 24px;
+            }
+            .stats-grid {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1 class="logo">Corporate Professionals</h1>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                Hello <strong>{{ recipient_name }}</strong>! 🎉
+            </div>
+            
+            <div class="message">
+                Great news! You have a new follower on Corporate Professionals. Your professional network is growing!
+            </div>
+            
+            <div class="follower-card">
+                <div class="follower-icon">👤</div>
+                <div class="follower-name">{{ actor_name }}</div>
+                <div class="follower-action">started following you</div>
+            </div>
+            
+            <div class="message">
+                This means {{ actor_name }} is interested in your professional content and wants to stay updated with your posts and activities.
+            </div>
+            
+            <div style="text-align: center;">
+                <a href="{{ profile_url }}" class="cta-button">View Your Profile</a>
+            </div>
+            
+            <div class="stats-container">
+                <div class="stats-title">Keep Building Your Network</div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number">+1</div>
+                        <div class="stat-label">New Follower</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">📈</div>
+                        <div class="stat-label">Growing Reach</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">🌟</div>
+                        <div class="stat-label">Professional Impact</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="message">
+                <strong>Tips to engage with your new follower:</strong>
+                <ul style="color: #4a5568; margin-left: 20px;">
+                    <li>Check out their profile and consider following back</li>
+                    <li>Share valuable content to keep them engaged</li>
+                    <li>Respond to their comments on your posts</li>
+                    <li>Connect with them to build a stronger relationship</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Best regards,<br><strong>Corporate Professionals Team</strong></p>
+            <div class="footer-links">
+                <a href="{{ frontend_url }}/network">My Network</a>
+                <a href="{{ frontend_url }}/notifications">Notifications</a>
+                <a href="{{ frontend_url }}/settings">Settings</a>
+            </div>
+            <p style="margin-top: 20px; font-size: 12px; color: #718096;">
+                © 2024 Corporate Professionals. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

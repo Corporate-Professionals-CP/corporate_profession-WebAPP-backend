@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ subject }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px 40px;
+            text-align: center;
+        }
+        .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0;
+            text-decoration: none;
+        }
+        .content {
+            padding: 40px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+        .message {
+            color: #4a5568;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .highlight-box {
+            background-color: #edf2f7;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            transition: transform 0.2s ease;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .footer {
+            background-color: #2d3748;
+            color: #a0aec0;
+            padding: 30px 40px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .footer-links {
+            margin-top: 20px;
+        }
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+        .social-icons {
+            margin-top: 20px;
+        }
+        .social-icons a {
+            display: inline-block;
+            margin: 0 10px;
+            color: #667eea;
+            font-size: 20px;
+        }
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            .header, .content, .footer {
+                padding: 20px !important;
+            }
+            .logo {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1 class="logo">Corporate Professionals</h1>
+        </div>
+        
+        <div class="content">
+            {% block content %}
+            {% endblock %}
+        </div>
+        
+        <div class="footer">
+            <p>Best regards,<br><strong>Corporate Professionals Team</strong></p>
+            <div class="footer-links">
+                <a href="{{ frontend_url }}/privacy">Privacy Policy</a>
+                <a href="{{ frontend_url }}/terms">Terms of Service</a>
+                <a href="{{ frontend_url }}/unsubscribe">Unsubscribe</a>
+            </div>
+            <div class="social-icons">
+                <a href="#">📧</a>
+                <a href="#">💼</a>
+                <a href="#">🌐</a>
+            </div>
+            <p style="margin-top: 20px; font-size: 12px; color: #718096;">
+                © 2024 Corporate Professionals. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

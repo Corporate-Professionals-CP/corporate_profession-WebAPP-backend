@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Someone Reacted to Your Post</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            padding: 30px 40px;
+            text-align: center;
+        }
+        .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0;
+        }
+        .content {
+            padding: 40px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+        .message {
+            color: #4a5568;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .reaction-card {
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+            border: 2px solid #f56565;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .reaction-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .reactor-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #742a2a;
+            margin-bottom: 10px;
+        }
+        .reaction-action {
+            color: #c53030;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .post-preview {
+            background-color: #f7fafc;
+            border-left: 4px solid #f56565;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+            font-style: italic;
+            color: #4a5568;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: #ffffff;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            transition: transform 0.2s ease;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .reaction-types {
+            background-color: #f7fafc;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .reaction-types-title {
+            color: #4a5568;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        .reaction-grid {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .reaction-item {
+            text-align: center;
+            margin: 10px;
+        }
+        .reaction-emoji {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .reaction-label {
+            font-size: 12px;
+            color: #718096;
+        }
+        .footer {
+            background-color: #2d3748;
+            color: #a0aec0;
+            padding: 30px 40px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .footer-links {
+            margin-top: 20px;
+        }
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            .header, .content, .footer {
+                padding: 20px !important;
+            }
+            .logo {
+                font-size: 24px;
+            }
+            .reaction-grid {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1 class="logo">Corporate Professionals</h1>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                Hello <strong>{{ recipient_name }}</strong>! ❤️
+            </div>
+            
+            <div class="message">
+                Your content is making an impact! Someone just reacted to your post on Corporate Professionals.
+            </div>
+            
+            <div class="reaction-card">
+                <div class="reaction-icon">👍</div>
+                <div class="reactor-name">{{ actor_name }}</div>
+                <div class="reaction-action">reacted to your post</div>
+            </div>
+            
+            <div class="post-preview">
+                <strong>Your post:</strong> "{{ post_content }}"
+            </div>
+            
+            <div class="message">
+                Reactions show that your content resonates with your professional network. Keep sharing valuable insights!
+            </div>
+            
+            <div style="text-align: center;">
+                <a href="{{ post_url }}" class="cta-button">View Post</a>
+            </div>
+            
+            <div class="reaction-types">
+                <div class="reaction-types-title">Reactions Help You Understand Your Audience</div>
+                <div class="reaction-grid">
+                    <div class="reaction-item">
+                        <div class="reaction-emoji">👍</div>
+                        <div class="reaction-label">Like</div>
+                    </div>
+                    <div class="reaction-item">
+                        <div class="reaction-emoji">❤️</div>
+                        <div class="reaction-label">Love</div>
+                    </div>
+                    <div class="reaction-item">
+                        <div class="reaction-emoji">💡</div>
+                        <div class="reaction-label">Insightful</div>
+                    </div>
+                    <div class="reaction-item">
+                        <div class="reaction-emoji">🎉</div>
+                        <div class="reaction-label">Celebrate</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="message">
+                <strong>Why reactions matter:</strong>
+                <ul style="color: #4a5568; margin-left: 20px;">
+                    <li>Boost your post's visibility in the feed</li>
+                    <li>Show engagement with your content</li>
+                    <li>Help you understand what resonates</li>
+                    <li>Encourage more interactions</li>
+                </ul>
+            </div>
+            
+            <div class="message">
+                <strong>Keep the momentum going:</strong>
+                <ul style="color: #4a5568; margin-left: 20px;">
+                    <li>Thank {{ actor_name }} for their engagement</li>
+                    <li>Share more content like this</li>
+                    <li>Engage with others' posts too</li>
+                    <li>Consider connecting with active engagers</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Best regards,<br><strong>Corporate Professionals Team</strong></p>
+            <div class="footer-links">
+                <a href="{{ frontend_url }}/posts">My Posts</a>
+                <a href="{{ frontend_url }}/analytics">Post Analytics</a>
+                <a href="{{ frontend_url }}/settings">Settings</a>
+            </div>
+            <p style="margin-top: 20px; font-size: 12px; color: #718096;">
+                © 2024 Corporate Professionals. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

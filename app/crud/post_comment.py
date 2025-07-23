@@ -35,6 +35,14 @@ async def create_comment(
         await db.commit()
         await db.refresh(comment)
         
+        # Eagerly load the user relationship to avoid lazy loading issues
+        result = await db.execute(
+            select(PostComment)
+            .options(selectinload(PostComment.user))
+            .where(PostComment.id == comment.id)
+        )
+        comment = result.scalar_one()
+        
         # Add media_urls to response
         if comment.media_url:
             comment.media_urls = comment.media_url.split(',')
@@ -62,7 +70,11 @@ async def get_comments_for_post(db: AsyncSession, post_id: str) -> List[PostComm
 
 async def get_comment_by_id(db: AsyncSession, comment_id: str) -> PostComment | None:
     try:
-        result = await db.execute(select(PostComment).where(PostComment.id == comment_id))
+        result = await db.execute(
+            select(PostComment)
+            .options(selectinload(PostComment.user))
+            .where(PostComment.id == comment_id)
+        )
         return result.scalar_one_or_none()
     except Exception as e:
         raise CustomHTTPException(status_code=500, detail=f"Failed to fetch comment by ID: {str(e)}")
@@ -97,6 +109,14 @@ async def update_comment(
 
         await db.commit()
         await db.refresh(comment)
+        
+        # Eagerly load the user relationship to avoid lazy loading issues
+        result = await db.execute(
+            select(PostComment)
+            .options(selectinload(PostComment.user))
+            .where(PostComment.id == comment.id)
+        )
+        comment = result.scalar_one()
         
         # Update media_urls for response
         if comment.media_url:
