@@ -317,9 +317,16 @@ async def get_potential_connections(db: AsyncSession, user_id: str, limit: int =
             user_dict = {
                 "id": user.id,
                 "full_name": user.full_name,
-                "job_title": user.job_title,
+                "headline": user.bio,  # Use bio as headline since headline field doesn't exist
+                "location": user.location,
+                "pronouns": None,  # Field doesn't exist in User model
                 "industry": user.industry,
-                "profile_picture_url": user.profile_image_url,
+                "years_of_experience": user.years_of_experience,
+                "job_title": user.job_title,
+                "profile_image_url": user.profile_image_url,
+                "avatar_text": user.full_name[:2].upper() if user.full_name else None,  # Generate initials
+                "recruiter_tag": user.recruiter_tag,
+                "created_at": user.created_at,
                 "connection_status": status_info["status"],
                 "action": status_info["action"]
             }
