@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, field_serializer, computed_field
 from .user import MinimalUserRead
 
 class PostCommentCreate(BaseModel):
@@ -18,7 +18,7 @@ class PostCommentRead(BaseModel):
     user_id: str
     post_id: str
     media_urls: Optional[List[str]] = None
-    user: MinimalUserRead
+    user: Optional[MinimalUserRead] = None
     created_at: datetime
 
     @field_serializer('media_urls')

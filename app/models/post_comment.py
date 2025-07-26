@@ -22,4 +22,4 @@ class PostComment(SQLModel, table=True):
     media_type: Optional[str] = Field(default=None)
 
     post: Mapped["Post"] = Relationship(back_populates="comments")
-    user: Mapped["User"] = Relationship()
+    # user: Mapped["User"] = Relationship(sa_relationship_kwargs={"lazy": "joined"})

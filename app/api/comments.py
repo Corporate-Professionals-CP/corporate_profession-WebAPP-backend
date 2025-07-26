@@ -57,7 +57,22 @@ async def add_comment(
                 )
             )
 
-        return new_comment
+        # Manually construct the response to avoid relationship issues
+        from app.schemas.user import MinimalUserRead
+        user_data = None
+        if hasattr(new_comment, '_user_data') and new_comment._user_data:
+            user_data = MinimalUserRead.model_validate(new_comment._user_data)
+        
+        response_data = CommentRead(
+            content=new_comment.content,
+            user_id=new_comment.user_id,
+            post_id=new_comment.post_id,
+            media_urls=getattr(new_comment, 'media_urls', []),
+            user=user_data,
+            created_at=new_comment.created_at
+        )
+        
+        return response_data
 
     except Exception as e:
         raise CustomHTTPException(status_code=500, detail=f"Error creating comment: {str(e)}")
