@@ -15,7 +15,7 @@ class PostComment(SQLModel, table=True):
     post_id: str = Field(foreign_key="post.id")
     user_id: str = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     media_url: Optional[str] = Field(default=None)
     media_urls: Optional[List[str]] = Field(default_factory=list, sa_column=Column(ARRAY(String), nullable=True))

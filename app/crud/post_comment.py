@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from app.models.post_comment import PostComment
@@ -5,6 +6,7 @@ from app.models.user import User
 from app.schemas.post_comment import PostCommentCreate, PostCommentUpdate
 from typing import Optional, List
 from app.core.exceptions import CustomHTTPException
+from fastapi import HTTPException
 from sqlalchemy.orm import selectinload
 
 async def create_comment(
@@ -99,6 +101,7 @@ async def update_comment(
 
         # Update content and media
         comment.content = data.content
+        comment.updated_at = datetime.utcnow()
         
         if media_urls is not None:  # Explicit None check to allow clearing media
             for url in media_urls or []:
