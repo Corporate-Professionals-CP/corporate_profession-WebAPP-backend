@@ -2,7 +2,7 @@ import logging
 from typing import List
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, or_
+from sqlmodel import select, or_, and_
 from uuid import UUID
 from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import SQLAlchemyError
@@ -35,12 +35,12 @@ async def send_connection_request(db: AsyncSession, sender_id: str, receiver_id:
             .where(
                 or_(
                     # Check if sender already sent request to receiver
-                    (
+                    and_(
                         Connection.sender_id == sender_id,
                         Connection.receiver_id == receiver_id
                     ),
                     # Check if receiver already sent request to sender
-                    (
+                    and_(
                         Connection.sender_id == receiver_id,
                         Connection.receiver_id == sender_id
                     )

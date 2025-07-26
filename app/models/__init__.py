@@ -11,9 +11,15 @@ from .analytics import (
     UserAnalytics, ContentAnalytics, PlatformAnalytics, 
     AnalyticsEvent, CohortAnalytics, AnalyticsEventType
 )
+from .reports import (
+    Report, UserOffenseLog, ReportResolutionMetrics, UserSafetyStatus,
+    ReportType, ReportStatus, ReportPriority, ContentType, OffenseType
+)
 
 __all__ = [
     "User", "Post", "Skill", "UserSkill", "Bookmark", "Connection",
     "UserAnalytics", "ContentAnalytics", "PlatformAnalytics", 
-    "AnalyticsEvent", "CohortAnalytics", "AnalyticsEventType"
+    "AnalyticsEvent", "CohortAnalytics", "AnalyticsEventType",
+    "Report", "UserOffenseLog", "ReportResolutionMetrics", "UserSafetyStatus",
+    "ReportType", "ReportStatus", "ReportPriority", "ContentType", "OffenseType"
 ]
