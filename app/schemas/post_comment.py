@@ -13,19 +13,11 @@ class PostCommentUpdate(BaseModel):
     content: str
     media_urls: Optional[List[str]] = None
 
-class PostCommentRead(BaseModel):
-    content: str
-    user_id: str
-    post_id: str
-    media_urls: Optional[List[str]] = None
-    user: Optional[MinimalUserRead] = None
+class PostCommentRead(PostCommentBase):
+    id: str
     created_at: datetime
-
-    @field_serializer('media_urls')
-    def serialize_media_urls(self, _value, _info):
-        if hasattr(self, 'media_url') and self.media_url:
-            return self.media_url.split(',')
-        return []
+    updated_at: datetime
+    user: MinimalUserRead
 
     class Config:
         from_attributes = True

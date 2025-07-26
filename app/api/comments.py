@@ -33,46 +33,8 @@ async def add_comment(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        # Create comment and store it
-        new_comment = await create_comment(
-            db=db,
-            user_id=current_user.id,
-            post_id=comment_in.post_id,
-            data=comment_in
-        )
-
-        # Get the post to notify the owner
-        post = await db.get(Post, comment_in.post_id)
-
-        if post and post.user_id != current_user.id:
-            await create_notification(
-                db,
-                Notification(
-                    recipient_id=post.user_id,
-                    actor_id=current_user.id,
-                    post_id=post.id,
-                    comment_id=new_comment.id,
-                    type=NotificationType.POST_COMMENT,
-                    message=f"{current_user.full_name} commented on your post."
-                )
-            )
-
-        # Manually construct the response to avoid relationship issues
-        from app.schemas.user import MinimalUserRead
-        user_data = None
-        if hasattr(new_comment, '_user_data') and new_comment._user_data:
-            user_data = MinimalUserRead.model_validate(new_comment._user_data)
-        
-        response_data = CommentRead(
-            content=new_comment.content,
-            user_id=new_comment.user_id,
-            post_id=new_comment.post_id,
-            media_urls=getattr(new_comment, 'media_urls', []),
-            user=user_data,
-            created_at=new_comment.created_at
-        )
-        
-        return response_data
+        comment = await create_comment(db, current_user.id, comment_in.post_id, comment_in)
+        return comment
 
     except Exception as e:
         raise CustomHTTPException(status_code=500, detail=f"Error creating comment: {str(e)}")
