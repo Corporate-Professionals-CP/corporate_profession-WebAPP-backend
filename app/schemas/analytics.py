@@ -155,7 +155,7 @@ class CohortAnalysisResponse(BaseModel):
 class CustomReportRequest(BaseModel):
     """Request for custom report generation"""
     name: str
-    time_range: TimeRange
+    time_range: Optional[TimeRange] = TimeRange.LAST_30_DAYS
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     
@@ -166,10 +166,10 @@ class CustomReportRequest(BaseModel):
     user_segments: Optional[List[str]] = None
     
     # Metrics to include
-    metrics: List[str]
+    metrics: Optional[List[str]] = None
     
     # Export format
-    export_format: str = Field(default="json", description="Export format: json, csv, or pdf")
+    export_format: Optional[str] = Field(default="json", description="Export format: json, csv, or pdf")
 
 
 class CustomReportResponse(BaseModel):

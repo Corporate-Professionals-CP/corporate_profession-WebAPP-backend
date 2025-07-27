@@ -340,9 +340,73 @@ async def generate_custom_report(
         )
     
     try:
+        logger.info(f"Starting custom report generation for user: {current_user.id}")
         report_id = str(uuid.uuid4())
+        analytics_service = AnalyticsService(db)
         
-        # Add background task to generate report
+        # Convert request to filters
+        filters = AnalyticsFilterRequest(
+            time_range=report_request.time_range,
+            start_date=report_request.start_date,
+            end_date=report_request.end_date,
+            countries=report_request.countries,
+            industries=report_request.industries
+        )
+        logger.info(f"Filters created: {filters}")
+        
+        # If no metrics specified, include all basic metrics
+        metrics_to_include = report_request.metrics or [
+            "user_metrics", "engagement_metrics", "content_analytics"
+        ]
+        logger.info(f"Metrics to include: {metrics_to_include}")
+        
+        # Generate real-time report data based on requested metrics
+        report_data = {}
+        
+        if "user_metrics" in metrics_to_include:
+            logger.info("Getting user metrics...")
+            user_metrics = await analytics_service.get_user_metrics(filters)
+            report_data["user_metrics"] = user_metrics
+            logger.info(f"User metrics retrieved: {len(str(user_metrics))} chars")
+        
+        if "engagement_metrics" in metrics_to_include:
+            logger.info("Getting engagement metrics...")
+            engagement_metrics = await analytics_service.get_engagement_metrics(filters)
+            report_data["engagement_metrics"] = engagement_metrics
+            logger.info(f"Engagement metrics retrieved: {len(str(engagement_metrics))} chars")
+        
+        if "content_analytics" in metrics_to_include:
+            logger.info("Getting content analytics...")
+            content_analytics = await analytics_service.get_content_analytics(filters)
+            report_data["content_analytics"] = content_analytics
+            logger.info(f"Content analytics retrieved: {len(str(content_analytics))} chars")
+        
+        if "activation_metrics" in metrics_to_include:
+            logger.info("Getting activation metrics...")
+            activation_metrics = await analytics_service.get_activation_metrics(filters)
+            report_data["activation_metrics"] = activation_metrics
+            logger.info(f"Activation metrics retrieved: {len(str(activation_metrics))} chars")
+            
+        if "job_posting_metrics" in metrics_to_include:
+            logger.info("Getting job posting metrics...")
+            job_metrics = await analytics_service.get_job_posting_metrics(filters)
+            report_data["job_posting_metrics"] = job_metrics
+            logger.info(f"Job posting metrics retrieved: {len(str(job_metrics))} chars")
+        
+        if "cohort_analysis" in metrics_to_include:
+            logger.info("Getting cohort analysis...")
+            cohort_data = await analytics_service.get_cohort_analysis(filters)
+            report_data["cohort_analysis"] = cohort_data
+            logger.info(f"Cohort analysis retrieved: {len(str(cohort_data))} chars")
+        
+        logger.info(f"Total report data keys: {list(report_data.keys())}")
+        
+        # Generate comprehensive summary
+        logger.info("Generating report summary...")
+        summary = await _generate_report_summary(report_data, filters)
+        logger.info(f"Summary generated: {len(str(summary))} chars")
+        
+        # Add background task to save report file
         background_tasks.add_task(
             _generate_custom_report_background,
             report_id,
@@ -351,15 +415,20 @@ async def generate_custom_report(
             current_user.id
         )
         
-        return CustomReportResponse(
+        response = CustomReportResponse(
             report_id=report_id,
             name=report_request.name,
             generated_at=datetime.utcnow(),
-            data={},
-            summary={},
+            data=report_data,
+            summary=summary,
             export_format=report_request.export_format,
             download_url=f"/analytics/reports/{report_id}/download"
         )
+        
+        logger.info(f"Returning response with data keys: {list(response.data.keys()) if response.data else 'None'}")
+        logger.info(f"Response data empty? {not bool(response.data)}")
+        
+        return response
         
     except Exception as e:
         logger.error(f"Error generating custom report: {str(e)}")
@@ -529,6 +598,150 @@ async def _generate_recommendations(
         recommendations.append("Implement daily engagement features to improve DAU/WAU ratio")
     
     return recommendations
+
+
+async def _generate_report_summary(
+    report_data: Dict[str, Any],
+    filters: AnalyticsFilterRequest
+) -> Dict[str, Any]:
+    """Generate comprehensive summary for custom report"""
+    summary = {
+        "overview": {},
+        "key_insights": [],
+        "recommendations": [],
+        "performance_highlights": {},
+        "growth_metrics": {},
+        "engagement_summary": {}
+    }
+    
+    # Overview section
+    if "user_metrics" in report_data:
+        user_data = report_data["user_metrics"]
+        summary["overview"]["total_users"] = user_data.get("total_users", 0)
+        summary["overview"]["new_signups"] = user_data.get("new_signups", 0)
+        summary["overview"]["active_users"] = {
+            "daily": user_data.get("daily_active_users", 0),
+            "weekly": user_data.get("weekly_active_users", 0),
+            "monthly": user_data.get("monthly_active_users", 0)
+        }
+    
+    # Growth metrics
+    if "user_metrics" in report_data:
+        user_data = report_data["user_metrics"]
+        summary["growth_metrics"] = {
+            "user_growth_rate": user_data.get("new_signups", 0),
+            "retention_indicators": {
+                "dau_wau_ratio": (user_data.get("daily_active_users", 0) / max(user_data.get("weekly_active_users", 1), 1)) * 100,
+                "wau_mau_ratio": (user_data.get("weekly_active_users", 0) / max(user_data.get("monthly_active_users", 1), 1)) * 100
+            }
+        }
+    
+    # Engagement summary
+    if "engagement_metrics" in report_data:
+        engagement_data = report_data["engagement_metrics"]
+        summary["engagement_summary"] = {
+            "total_content_created": engagement_data.get("total_posts", 0),
+            "total_interactions": engagement_data.get("total_comments", 0) + engagement_data.get("total_likes", 0),
+            "average_session_duration": engagement_data.get("average_session_duration", 0),
+            "connection_activity": engagement_data.get("total_connections", 0)
+        }
+    
+    # Performance highlights
+    if "content_analytics" in report_data:
+        content_data = report_data["content_analytics"]
+        summary["performance_highlights"]["content_performance"] = {
+            "average_engagement_rate": content_data.get("average_engagement_rate", 0),
+            "top_content_types": content_data.get("post_type_distribution", {}),
+            "viral_content_count": len(content_data.get("most_viral_posts", []))
+        }
+    
+    if "activation_metrics" in report_data:
+        activation_data = report_data["activation_metrics"]
+        summary["performance_highlights"]["user_activation"] = {
+            "profile_completion_rate": activation_data.get("profile_completion_rate", 0),
+            "profile_picture_rate": activation_data.get("profile_picture_upload_rate", 0),
+            "connection_engagement_rate": activation_data.get("connection_request_rate", 0)
+        }
+    
+    # Generate key insights
+    insights = []
+    
+    if "user_metrics" in report_data:
+        user_data = report_data["user_metrics"]
+        if user_data.get("new_signups", 0) > 0:
+            insights.append(f"Platform gained {user_data['new_signups']} new users during the selected period")
+        
+        dau = user_data.get("daily_active_users", 0)
+        wau = user_data.get("weekly_active_users", 0)
+        if wau > 0:
+            dau_wau_ratio = (dau / wau) * 100
+            if dau_wau_ratio > 30:
+                insights.append(f"Strong daily engagement with {dau_wau_ratio:.1f}% DAU/WAU ratio")
+            else:
+                insights.append(f"Daily engagement could be improved (DAU/WAU ratio: {dau_wau_ratio:.1f}%)")
+    
+    if "engagement_metrics" in report_data:
+        engagement_data = report_data["engagement_metrics"]
+        total_posts = engagement_data.get("total_posts", 0)
+        total_interactions = engagement_data.get("total_comments", 0) + engagement_data.get("total_likes", 0)
+        if total_posts > 0:
+            avg_interactions_per_post = total_interactions / total_posts
+            insights.append(f"Average of {avg_interactions_per_post:.1f} interactions per post")
+    
+    if "activation_metrics" in report_data:
+        activation_data = report_data["activation_metrics"]
+        completion_rate = activation_data.get("profile_completion_rate", 0)
+        if completion_rate > 70:
+            insights.append(f"Excellent onboarding with {completion_rate:.1f}% profile completion rate")
+        elif completion_rate > 50:
+            insights.append(f"Good onboarding performance with {completion_rate:.1f}% profile completion rate")
+        else:
+            insights.append(f"Onboarding needs improvement - only {completion_rate:.1f}% profile completion rate")
+    
+    if "job_posting_metrics" in report_data:
+        job_data = report_data["job_posting_metrics"]
+        total_jobs = job_data.get("total_job_postings", 0)
+        active_jobs = job_data.get("active_job_postings", 0)
+        if total_jobs > 0:
+            insights.append(f"Job market activity: {total_jobs} total postings, {active_jobs} currently active")
+    
+    summary["key_insights"] = insights
+    
+    # Generate recommendations
+    recommendations = []
+    
+    if "activation_metrics" in report_data:
+        activation_data = report_data["activation_metrics"]
+        completion_rate = activation_data.get("profile_completion_rate", 0)
+        if completion_rate < 60:
+            recommendations.append("Improve onboarding flow to increase profile completion rates")
+        
+        connection_rate = activation_data.get("connection_request_rate", 0)
+        if connection_rate < 40:
+            recommendations.append("Implement features to encourage networking and connections")
+    
+    if "engagement_metrics" in report_data:
+        engagement_data = report_data["engagement_metrics"]
+        session_duration = engagement_data.get("average_session_duration", 0)
+        if session_duration < 5:
+            recommendations.append("Focus on content quality and user experience to increase session duration")
+    
+    if "user_metrics" in report_data:
+        user_data = report_data["user_metrics"]
+        dau = user_data.get("daily_active_users", 0)
+        wau = user_data.get("weekly_active_users", 0)
+        if wau > 0 and (dau / wau) < 0.25:
+            recommendations.append("Implement daily engagement features to improve user retention")
+    
+    if "content_analytics" in report_data:
+        content_data = report_data["content_analytics"]
+        engagement_rate = content_data.get("average_engagement_rate", 0)
+        if engagement_rate < 5:
+            recommendations.append("Enhance content discovery and recommendation algorithms")
+    
+    summary["recommendations"] = recommendations
+    
+    return summary
 
 
 async def _generate_custom_report_background(

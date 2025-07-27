@@ -75,32 +75,58 @@ class AnalyticsService:
         )
         new_signups = await self.db.scalar(new_signups_query)
         
-        # Daily active users
-        dau_query = select(func.count(func.distinct(UserAnalytics.user_id))).where(
+        # Daily active users (users who have been active in the last day)
+        # Since we don't have login tracking yet, we'll use users who created content recently
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        dau_query = select(func.count(func.distinct(User.id))).where(
             and_(
-                UserAnalytics.date >= start_date,
-                UserAnalytics.date <= end_date,
-                UserAnalytics.login_count > 0
+                User.is_active == True,
+                or_(
+                    User.last_login_at >= yesterday,
+                    # Include users who created posts/comments recently as "active"
+                    User.id.in_(
+                        select(Post.user_id).where(Post.created_at >= yesterday)
+                    ),
+                    User.id.in_(
+                        select(PostComment.user_id).where(PostComment.created_at >= yesterday)
+                    )
+                )
             )
         )
         dau = await self.db.scalar(dau_query)
         
         # Weekly active users
         week_ago = datetime.utcnow() - timedelta(days=7)
-        wau_query = select(func.count(func.distinct(UserAnalytics.user_id))).where(
+        wau_query = select(func.count(func.distinct(User.id))).where(
             and_(
-                UserAnalytics.date >= week_ago.date(),
-                UserAnalytics.login_count > 0
+                User.is_active == True,
+                or_(
+                    User.last_login_at >= week_ago,
+                    User.id.in_(
+                        select(Post.user_id).where(Post.created_at >= week_ago)
+                    ),
+                    User.id.in_(
+                        select(PostComment.user_id).where(PostComment.created_at >= week_ago)
+                    )
+                )
             )
         )
         wau = await self.db.scalar(wau_query)
         
         # Monthly active users
         month_ago = datetime.utcnow() - timedelta(days=30)
-        mau_query = select(func.count(func.distinct(UserAnalytics.user_id))).where(
+        mau_query = select(func.count(func.distinct(User.id))).where(
             and_(
-                UserAnalytics.date >= month_ago.date(),
-                UserAnalytics.login_count > 0
+                User.is_active == True,
+                or_(
+                    User.last_login_at >= month_ago,
+                    User.id.in_(
+                        select(Post.user_id).where(Post.created_at >= month_ago)
+                    ),
+                    User.id.in_(
+                        select(PostComment.user_id).where(PostComment.created_at >= month_ago)
+                    )
+                )
             )
         )
         mau = await self.db.scalar(mau_query)
@@ -563,16 +589,17 @@ class AnalyticsService:
     
     async def _get_dau_trend(self, start_date: datetime, end_date: datetime) -> List[Dict]:
         """Get DAU trend data"""
+        # Since we don't have UserAnalytics data, we'll create a trend based on user activity
+        # For now, return a simple trend based on new signups as a proxy
         query = select(
-            UserAnalytics.date,
-            func.count(func.distinct(UserAnalytics.user_id)).label('dau')
+            func.date(User.created_at).label('date'),
+            func.count(User.id).label('dau')
         ).where(
             and_(
-                UserAnalytics.date >= start_date.date(),
-                UserAnalytics.date <= end_date.date(),
-                UserAnalytics.login_count > 0
+                User.created_at >= start_date,
+                User.created_at <= end_date
             )
-        ).group_by(UserAnalytics.date).order_by(UserAnalytics.date)
+        ).group_by(func.date(User.created_at)).order_by(func.date(User.created_at))
         
         result = await self.db.execute(query)
         return [{"date": row.date, "value": row.dau} for row in result.all()]
@@ -688,29 +715,139 @@ class AnalyticsService:
         return [{"date": row.date, "value": row.likes} for row in result.all()]
     
     async def _get_avg_session_duration(self, start_date: datetime, end_date: datetime) -> float:
-        """Get average session duration"""
-        query = select(
-            func.avg(UserAnalytics.session_duration_minutes)
-        ).where(
-            and_(
-                UserAnalytics.date >= start_date.date(),
-                UserAnalytics.date <= end_date.date(),
-                UserAnalytics.session_duration_minutes > 0
+        """Get average session duration from session events"""
+        try:
+            # Get all session start and end events in the time period
+            session_events = await self.db.execute(
+                select(
+                    AnalyticsEvent.user_id,
+                    AnalyticsEvent.event_type,
+                    AnalyticsEvent.timestamp,
+                    AnalyticsEvent.session_id
+                ).where(
+                    and_(
+                        AnalyticsEvent.event_type.in_([
+                            AnalyticsEventType.SESSION_START,
+                            AnalyticsEventType.SESSION_END
+                        ]),
+                        AnalyticsEvent.timestamp >= start_date,
+                        AnalyticsEvent.timestamp <= end_date,
+                        AnalyticsEvent.session_id.isnot(None)
+                    )
+                ).order_by(AnalyticsEvent.user_id, AnalyticsEvent.timestamp)
             )
-        )
-        
-        result = await self.db.scalar(query)
-        return result or 0.0
+            
+            events = session_events.all()
+            if not events:
+                return 0.0
+            
+            # Group events by session_id and calculate durations
+            session_durations = []
+            sessions = {}
+            
+            for event in events:
+                session_id = event.session_id
+                if session_id not in sessions:
+                    sessions[session_id] = {'start': None, 'end': None}
+                
+                if event.event_type == AnalyticsEventType.SESSION_START:
+                    sessions[session_id]['start'] = event.timestamp
+                elif event.event_type == AnalyticsEventType.SESSION_END:
+                    sessions[session_id]['end'] = event.timestamp
+            
+            # Calculate durations for complete sessions
+            for session_data in sessions.values():
+                if session_data['start'] and session_data['end']:
+                    duration_minutes = (session_data['end'] - session_data['start']).total_seconds() / 60
+                    if duration_minutes > 0:  # Only count positive durations
+                        session_durations.append(duration_minutes)
+            
+            if not session_durations:
+                return 0.0
+            
+            return sum(session_durations) / len(session_durations)
+            
+        except Exception as e:
+            logger.error(f"Error calculating average session duration: {str(e)}")
+            return 0.0
     
     async def _get_repeat_visit_rates(self) -> Dict[str, float]:
-        """Get repeat visit rates"""
-        # This would implement logic to calculate daily, weekly, monthly repeat visit rates
-        # For now, return placeholder values
-        return {
-            "daily": 0.0,
-            "weekly": 0.0,
-            "monthly": 0.0
-        }
+        """Get repeat visit rates based on session data"""
+        try:
+            now = datetime.utcnow()
+            
+            # Calculate repeat visit rates for different time periods
+            rates = {}
+            
+            # Daily repeat visit rate (users who had sessions on multiple days in last 7 days)
+            daily_start = now - timedelta(days=7)
+            daily_users = await self.db.execute(
+                select(
+                    AnalyticsEvent.user_id,
+                    func.count(func.distinct(func.date(AnalyticsEvent.timestamp))).label('unique_days')
+                ).where(
+                    and_(
+                        AnalyticsEvent.event_type == AnalyticsEventType.SESSION_START,
+                        AnalyticsEvent.timestamp >= daily_start,
+                        AnalyticsEvent.user_id.isnot(None)
+                    )
+                ).group_by(AnalyticsEvent.user_id)
+            )
+            
+            daily_results = daily_users.all()
+            total_daily_users = len(daily_results)
+            repeat_daily_users = sum(1 for user in daily_results if user.unique_days > 1)
+            rates["daily"] = (repeat_daily_users / total_daily_users * 100) if total_daily_users > 0 else 0.0
+            
+            # Weekly repeat visit rate (users who had sessions on multiple weeks in last 4 weeks)
+            weekly_start = now - timedelta(weeks=4)
+            weekly_users = await self.db.execute(
+                select(
+                    AnalyticsEvent.user_id,
+                    func.count(func.distinct(func.extract('week', AnalyticsEvent.timestamp))).label('unique_weeks')
+                ).where(
+                    and_(
+                        AnalyticsEvent.event_type == AnalyticsEventType.SESSION_START,
+                        AnalyticsEvent.timestamp >= weekly_start,
+                        AnalyticsEvent.user_id.isnot(None)
+                    )
+                ).group_by(AnalyticsEvent.user_id)
+            )
+            
+            weekly_results = weekly_users.all()
+            total_weekly_users = len(weekly_results)
+            repeat_weekly_users = sum(1 for user in weekly_results if user.unique_weeks > 1)
+            rates["weekly"] = (repeat_weekly_users / total_weekly_users * 100) if total_weekly_users > 0 else 0.0
+            
+            # Monthly repeat visit rate (users who had sessions on multiple months in last 6 months)
+            monthly_start = now - timedelta(days=180)
+            monthly_users = await self.db.execute(
+                select(
+                    AnalyticsEvent.user_id,
+                    func.count(func.distinct(func.extract('month', AnalyticsEvent.timestamp))).label('unique_months')
+                ).where(
+                    and_(
+                        AnalyticsEvent.event_type == AnalyticsEventType.SESSION_START,
+                        AnalyticsEvent.timestamp >= monthly_start,
+                        AnalyticsEvent.user_id.isnot(None)
+                    )
+                ).group_by(AnalyticsEvent.user_id)
+            )
+            
+            monthly_results = monthly_users.all()
+            total_monthly_users = len(monthly_results)
+            repeat_monthly_users = sum(1 for user in monthly_results if user.unique_months > 1)
+            rates["monthly"] = (repeat_monthly_users / total_monthly_users * 100) if total_monthly_users > 0 else 0.0
+            
+            return rates
+            
+        except Exception as e:
+            logger.error(f"Error calculating repeat visit rates: {str(e)}")
+            return {
+                "daily": 0.0,
+                "weekly": 0.0,
+                "monthly": 0.0
+            }
     
     async def _get_post_type_distribution(self, start_date: datetime, end_date: datetime) -> Dict[str, int]:
         """Get post type distribution"""
@@ -948,39 +1085,87 @@ class AnalyticsService:
         return frequency_counts
 
     async def _get_session_duration_distribution(self, start_date: datetime, end_date: datetime) -> Dict[str, int]:
-        """Get session duration distribution"""
-        # Since we don't have detailed session tracking, we'll use activity patterns as proxy
-        # Categorize users by their activity patterns
-        query = select(
-            UserAnalytics.session_duration_minutes,
-            func.count(UserAnalytics.user_id).label('count')
-        ).where(
-            and_(
-                UserAnalytics.date >= start_date.date(),
-                UserAnalytics.date <= end_date.date(),
-                UserAnalytics.session_duration_minutes > 0
+        """Get session duration distribution from actual session events"""
+        try:
+            # Get all session start and end events in the time period
+            session_events = await self.db.execute(
+                select(
+                    AnalyticsEvent.user_id,
+                    AnalyticsEvent.event_type,
+                    AnalyticsEvent.timestamp,
+                    AnalyticsEvent.session_id
+                ).where(
+                    and_(
+                        AnalyticsEvent.event_type.in_([
+                            AnalyticsEventType.SESSION_START,
+                            AnalyticsEventType.SESSION_END
+                        ]),
+                        AnalyticsEvent.timestamp >= start_date,
+                        AnalyticsEvent.timestamp <= end_date,
+                        AnalyticsEvent.session_id.isnot(None)
+                    )
+                ).order_by(AnalyticsEvent.user_id, AnalyticsEvent.timestamp)
             )
-        ).group_by(UserAnalytics.session_duration_minutes)
-        
-        result = await self.db.execute(query)
-        
-        # Categorize into buckets
-        distribution = {"0-5 min": 0, "5-15 min": 0, "15-30 min": 0, "30-60 min": 0, "60+ min": 0}
-        
-        for row in result.all():
-            duration = row.session_duration_minutes
-            if duration <= 5:
-                distribution["0-5 min"] += row.count
-            elif duration <= 15:
-                distribution["5-15 min"] += row.count
-            elif duration <= 30:
-                distribution["15-30 min"] += row.count
-            elif duration <= 60:
-                distribution["30-60 min"] += row.count
-            else:
-                distribution["60+ min"] += row.count
-        
-        return distribution
+            
+            events = session_events.all()
+            if not events:
+                # Return empty distribution if no session data
+                return {
+                    "0-5 min": 0,
+                    "5-15 min": 0,
+                    "15-30 min": 0,
+                    "30-60 min": 0,
+                    "60+ min": 0
+                }
+            
+            # Group events by session_id and calculate durations
+            sessions = {}
+            for event in events:
+                session_id = event.session_id
+                if session_id not in sessions:
+                    sessions[session_id] = {'start': None, 'end': None}
+                
+                if event.event_type == AnalyticsEventType.SESSION_START:
+                    sessions[session_id]['start'] = event.timestamp
+                elif event.event_type == AnalyticsEventType.SESSION_END:
+                    sessions[session_id]['end'] = event.timestamp
+            
+            # Calculate durations and categorize
+            distribution = {
+                "0-5 min": 0,
+                "5-15 min": 0,
+                "15-30 min": 0,
+                "30-60 min": 0,
+                "60+ min": 0
+            }
+            
+            for session_data in sessions.values():
+                if session_data['start'] and session_data['end']:
+                    duration_minutes = (session_data['end'] - session_data['start']).total_seconds() / 60
+                    
+                    if duration_minutes <= 5:
+                        distribution["0-5 min"] += 1
+                    elif duration_minutes <= 15:
+                        distribution["5-15 min"] += 1
+                    elif duration_minutes <= 30:
+                        distribution["15-30 min"] += 1
+                    elif duration_minutes <= 60:
+                        distribution["30-60 min"] += 1
+                    else:
+                        distribution["60+ min"] += 1
+            
+            return distribution
+            
+        except Exception as e:
+            logger.error(f"Error calculating session duration distribution: {str(e)}")
+            # Return placeholder distribution on error
+            return {
+                "0-5 min": 0,
+                "5-15 min": 0,
+                "15-30 min": 0,
+                "30-60 min": 0,
+                "60+ min": 0
+            }
 
     async def _get_activation_by_industry(self, users: List[User]) -> Dict[str, float]:
         """Get activation rates by industry"""
