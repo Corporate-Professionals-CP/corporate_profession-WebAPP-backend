@@ -332,7 +332,88 @@ async def generate_custom_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Generate a custom analytics report"""
+    """
+    Generate a custom analytics report with flexible metrics and filters.
+    
+    This endpoint allows administrators to create comprehensive analytics reports
+    with customizable metrics, time ranges, and export formats.
+    
+    **Example Request Payloads:**
+    
+    **Basic Report (All Metrics):**
+    ```json
+    {
+        "name": "Monthly Analytics Report",
+        "time_range": "LAST_30_DAYS",
+        "export_format": "JSON"
+    }
+    ```
+    
+    **Specific Metrics Report:**
+    ```json
+    {
+        "name": "User Engagement Analysis",
+        "metrics": ["user_metrics", "engagement_metrics"],
+        "time_range": "LAST_7_DAYS",
+        "export_format": "CSV"
+    }
+    ```
+    
+    **Custom Date Range Report:**
+    ```json
+    {
+        "name": "Q1 2024 Performance Report",
+        "start_date": "2024-01-01T00:00:00Z",
+        "end_date": "2024-03-31T23:59:59Z",
+        "metrics": ["user_metrics", "content_analytics", "job_posting_metrics"],
+        "countries": ["US", "CA", "UK"],
+        "industries": ["Technology", "Finance"],
+        "export_format": "JSON"
+    }
+    ```
+    
+    **Comprehensive Report with All Metrics:**
+    ```json
+    {
+        "name": "Complete Analytics Dashboard",
+        "metrics": [
+            "user_metrics",
+            "engagement_metrics", 
+            "content_analytics",
+            "activation_metrics",
+            "job_posting_metrics",
+            "cohort_analysis"
+        ],
+        "time_range": "LAST_90_DAYS",
+        "export_format": "JSON"
+    }
+    ```
+    
+    **Available Metrics:**
+    - `user_metrics`: User registration, growth, demographics
+    - `engagement_metrics`: Session data, interactions, repeat visits
+    - `content_analytics`: Posts, comments, likes, shares
+    - `activation_metrics`: User activation funnel and conversion
+    - `job_posting_metrics`: Job posting performance and applications
+    - `cohort_analysis`: User retention and cohort behavior
+    
+    **Available Time Ranges:**
+    - `LAST_7_DAYS`, `LAST_30_DAYS`, `LAST_90_DAYS`
+    - `THIS_WEEK`, `THIS_MONTH`, `THIS_QUARTER`, `THIS_YEAR`
+    - `LAST_WEEK`, `LAST_MONTH`, `LAST_QUARTER`, `LAST_YEAR`
+    - `CUSTOM` (requires start_date and end_date)
+    
+    **Export Formats:**
+    - `JSON`: Structured data for API consumption
+    - `CSV`: Spreadsheet-compatible format
+    - `PDF`: Formatted report document
+    
+    **Response includes:**
+    - Real-time analytics data
+    - AI-generated insights and recommendations
+    - Download URL for exported report
+    - Performance highlights and growth metrics
+    """
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
