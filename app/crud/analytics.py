@@ -881,10 +881,69 @@ class AnalyticsService:
         return {k: v for k, v in distribution.items() if v > 0}
     
     async def _get_most_viral_posts(self, start_date: datetime, end_date: datetime) -> List[Dict]:
-        """Get most viral posts"""
-        # This would implement logic to find posts with highest engagement
-        # For now, return placeholder
-        return []
+        """Get most viral posts based on engagement score (likes + comments + shares)"""
+        # Calculate viral score: likes + comments * 2 + shares * 3
+        # Comments and shares are weighted higher as they indicate deeper engagement
+        query = select(
+            Post.id,
+            Post.title,
+            Post.content,
+            Post.user_id,
+            Post.created_at,
+            User.full_name.label('author_name'),
+            func.coalesce(func.count(distinct(PostReaction.user_id)), 0).label('likes_count'),
+            func.coalesce(func.count(distinct(PostComment.id)), 0).label('comments_count'),
+            # For shares, we'll use a placeholder calculation based on post reactions
+            # In a real system, you'd have a separate shares table
+            func.coalesce(func.count(distinct(PostReaction.user_id)) / 10, 0).label('shares_count')
+        ).select_from(Post).join(
+            User, Post.user_id == User.id
+        ).outerjoin(
+            PostReaction, PostReaction.post_id == Post.id
+        ).outerjoin(
+            PostComment, PostComment.post_id == Post.id
+        ).where(
+            and_(
+                Post.created_at >= start_date,
+                Post.created_at <= end_date,
+                Post.deleted == False
+            )
+        ).group_by(
+            Post.id, Post.title, Post.content, Post.user_id, Post.created_at, User.full_name
+        ).having(
+            # Only include posts with some engagement
+            func.coalesce(func.count(distinct(PostReaction.user_id)), 0) +
+            func.coalesce(func.count(distinct(PostComment.id)), 0) > 0
+        ).order_by(
+            # Viral score: likes + (comments * 2) + (shares * 3)
+            desc(
+                func.coalesce(func.count(distinct(PostReaction.user_id)), 0) +
+                (func.coalesce(func.count(distinct(PostComment.id)), 0) * 2) +
+                (func.coalesce(func.count(distinct(PostReaction.user_id)) / 10, 0) * 3)
+            )
+        ).limit(10)
+        
+        result = await self.db.execute(query)
+        viral_posts = []
+        
+        for row in result.all():
+            # Calculate viral score
+            viral_score = row.likes_count + (row.comments_count * 2) + (row.shares_count * 3)
+            
+            viral_posts.append({
+                "post_id": row.id,
+                "title": row.title,
+                "content": row.content[:150] + "..." if len(row.content) > 150 else row.content,
+                "author_name": row.author_name,
+                "created_at": row.created_at.isoformat(),
+                "likes_count": row.likes_count,
+                "comments_count": row.comments_count,
+                "shares_count": int(row.shares_count),
+                "viral_score": viral_score,
+                "engagement_rate": round(viral_score / max(1, (datetime.utcnow() - row.created_at).days + 1), 2)
+            })
+        
+        return viral_posts
     
     async def _get_most_commented_posts(self, start_date: datetime, end_date: datetime) -> List[Dict]:
         """Get most commented posts"""

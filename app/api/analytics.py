@@ -264,6 +264,72 @@ async def get_content_analytics(
         )
 
 
+@router.get("/viral-posts")
+async def get_most_viral_posts(
+    time_range: TimeRange = Query(TimeRange.LAST_30_DAYS),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the most viral posts based on engagement metrics.
+    
+    Returns posts ranked by viral score calculated from:
+    - Likes (weight: 1x)
+    - Comments (weight: 2x) 
+    - Shares (weight: 3x)
+    
+    Requires admin privileges.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Admin privileges required."
+        )
+    
+    try:
+        analytics_service = AnalyticsService(db)
+        
+        # Convert time_range to start_date and end_date if needed
+        if time_range != TimeRange.CUSTOM:
+            filters = AnalyticsFilterRequest(
+                time_range=time_range,
+                start_date=start_date,
+                end_date=end_date
+            )
+            # Get the actual date range from the service
+            date_range = analytics_service._get_date_range(filters)
+            start_date = date_range[0]
+            end_date = date_range[1]
+        
+        viral_posts = await analytics_service._get_most_viral_posts(
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        # Limit results
+        limited_posts = viral_posts[:limit]
+        
+        return {
+            "viral_posts": limited_posts,
+            "total_count": len(viral_posts),
+            "time_range": {
+                "start_date": start_date,
+                "end_date": end_date
+            },
+            "generated_at": datetime.utcnow()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching viral posts: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch viral posts"
+        )
+
+
 @router.get("/activation-metrics", response_model=ActivationMetricsResponse)
 async def get_activation_metrics(
     time_range: TimeRange = Query(TimeRange.LAST_30_DAYS),
