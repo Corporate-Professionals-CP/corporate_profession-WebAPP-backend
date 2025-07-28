@@ -2,14 +2,14 @@ import asyncio
 import uuid
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.database import get_async_session
+from app.db.database import get_db
 from app.models.analytics import AnalyticsEvent, AnalyticsEventType
 from app.crud.analytics import AnalyticsService
 from app.schemas.analytics import AnalyticsFilterRequest, TimeRange
 
 async def create_sample_session_data():
     """Create sample session events for testing"""
-    async for db in get_async_session():
+    async for db in get_db():
         try:
             # Create sample session events
             now = datetime.utcnow()
@@ -60,7 +60,7 @@ async def create_sample_session_data():
 
 async def test_session_analytics():
     """Test the session analytics methods"""
-    async for db in get_async_session():
+    async for db in get_db():
         try:
             analytics_service = AnalyticsService(db)
             
