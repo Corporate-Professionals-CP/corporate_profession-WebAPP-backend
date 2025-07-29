@@ -36,6 +36,7 @@ from app.core.config import settings
 from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id, get_user_by_email_or_username
 from app.core.email import send_verification_email, send_password_reset_email
 from pydantic import parse_obj_as
+from app.utils.activity_logger import log_user_activity
 from sqlalchemy.orm.attributes import flag_modified
 from app.core.exceptions import CustomHTTPException
 from app.core.error_codes import (
@@ -96,6 +97,93 @@ if all([settings.GOOGLE_CLIENT_ID, settings.GOOGLE_CLIENT_SECRET]):
         client_kwargs={"scope": "openid email profile"},
         server_metadata_url=settings.GOOGLE_METADATA_URL
     )
+
+@router.post("/admin/login", response_model=AuthResponse)
+async def admin_login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db)
+):
+    """Admin-only login endpoint. Only users with admin privileges can login through this endpoint."""
+    user = await get_user_by_email(db, form_data.username)
+    if not user:
+        logger.warning(f"Admin login attempt for non-existent user: {form_data.username}")
+        raise CustomHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email not found",
+            error_code=EMAIL_NOT_FOUND,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not verify_password(form_data.password, user.hashed_password):
+        logger.warning(f"Failed admin login attempt for user: {user.email}")
+        raise CustomHTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            error_code=INVALID_CREDENTIALS,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Check if user is admin BEFORE other checks
+    if not user.is_admin:
+        logger.warning(f"Non-admin user attempted admin login: {user.email}")
+        raise CustomHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+            error_code=NOT_AUTHORIZED,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise CustomHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account deactivated. Please contact support",
+            error_code=ACCOUNT_DEACTIVATION,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_verified:
+        raise CustomHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account not verified. Please check your email",
+            error_code=ACCOUNT_NOT_VERIFIED,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Update login tracking
+    user.last_login_at = datetime.utcnow()
+    user.login_count += 1
+    user.last_active_at = datetime.utcnow()
+    
+    # Store user ID and scopes - admin users get admin scope
+    user_id = str(user.id)
+    scopes = ["user", "admin"]
+    if user.recruiter_tag:
+        scopes.append("recruiter")
+    
+    # Log the admin login activity
+    try:
+        await log_user_activity(
+            db=db,
+            user_id=user_id,
+            activity_type="admin_login",
+            description="Admin user logged in via admin endpoint",
+            ip_address=str(request.client.host) if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            extra_data={"login_method": "admin_password", "endpoint": "/auth/admin/login"}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log admin login activity: {e}")
+    
+    await db.commit()
+
+    return {
+        "access_token": create_access_token(user_id, scopes),
+        "refresh_token": create_refresh_token(user_id),
+        "token_type": "bearer",
+        "expires_at": datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        "user": user
+    }
 
 @router.post("/token", response_model=AuthResponse)
 @router.post("/login", response_model=AuthResponse)
