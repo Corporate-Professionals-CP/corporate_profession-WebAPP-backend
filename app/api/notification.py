@@ -6,7 +6,7 @@ from app.db.database import get_db
 from app.core.security import verify_token, get_user_by_id, get_current_active_user
 from app.models.user import User
 from app.models.notification import Notification
-from app.schemas.notification import NotificationRead, NotificationResponse
+from app.schemas.notification import NotificationRead, NotificationResponse, NotificationReadResponse, NotificationNavigation
 from app.crud import notification as notif_crud
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
@@ -87,3 +87,66 @@ async def mark_notification_as_read(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification not found or already read"
         )
+
+@router.get("/{notif_id}/read", response_model=NotificationReadResponse)
+async def read_notification(
+    notif_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Read a notification and get navigation information to the related event"""
+    notification, navigation_info = await notif_crud.read_notification_with_navigation(
+        db, notif_id, str(current_user.id)
+    )
+    
+    if not notification:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found"
+        )
+    
+    # Convert notification to response format
+    from app.crud.user import generate_avatar_fallback
+    
+    # Prepare actor data if available
+    actor_data = None
+    if notification.actor:
+        avatar_tuple = generate_avatar_fallback(notification.actor)
+        actor_data = {
+            "id": str(notification.actor.id),
+            "full_name": notification.actor.full_name,
+            "avatar": {
+                "initials": avatar_tuple[0],
+                "color": avatar_tuple[1]
+            }
+        }
+    
+    # Prepare post data if available
+    post_data = None
+    if notification.post:
+        post_data = {
+            "id": str(notification.post.id),
+            "content": notification.post.content
+        }
+    
+    notification_read = NotificationRead(
+        id=notification.id,
+        type=notification.type,
+        message=notification.message,
+        is_read=notification.is_read,
+        created_at=notification.created_at.isoformat(),
+        actor=actor_data,
+        post=post_data,
+        reference_id=notification.reference_id
+    )
+    
+    navigation = NotificationNavigation(
+        url=navigation_info["url"],
+        type=navigation_info["type"],
+        target_id=navigation_info["target_id"]
+    )
+    
+    return NotificationReadResponse(
+        notification=notification_read,
+        navigation=navigation
+    )

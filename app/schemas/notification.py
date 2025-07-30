@@ -42,3 +42,17 @@ class NotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class NotificationNavigation(BaseModel):
+    """Navigation information for a notification"""
+    url: str
+    type: str  # 'profile', 'post', 'connections', 'messages', etc.
+    target_id: Optional[str] = None  # ID of the target resource
+
+class NotificationReadResponse(BaseModel):
+    """Response when reading a notification with navigation info"""
+    notification: NotificationRead
+    navigation: NotificationNavigation
+    
+    class Config:
+        from_attributes = True
