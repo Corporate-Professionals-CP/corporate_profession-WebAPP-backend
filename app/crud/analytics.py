@@ -21,7 +21,7 @@ from app.models.connection import Connection, ConnectionStatus
 from app.models.post_comment import PostComment
 from app.models.post_reaction import PostReaction
 from app.schemas.analytics import TimeRange, AnalyticsFilterRequest, MetricTrend
-from app.schemas.enums import Industry, PostType
+from app.schemas.enums import PostType
 
 logger = logging.getLogger(__name__)
 
@@ -1228,19 +1228,16 @@ class AnalyticsService:
 
     async def _get_activation_by_industry(self, users: List[User]) -> Dict[str, float]:
         """Get activation rates by industry"""
-        # Initialize stats for all industry enum values
+        # Initialize stats for industries found in users
         industry_stats = {}
-        for industry in Industry:
-            industry_stats[industry.value] = {"total": 0, "activated": 0}
         
         # Group users by industry and calculate activation rates
         for user in users:
-            # Get the user's industry, defaulting to "Other" if not set or invalid
-            user_industry = user.industry if hasattr(user, 'industry') and user.industry else Industry.OTHER.value
+            # Get the user's industry, defaulting to "Other" if not set
+            user_industry = user.industry if hasattr(user, 'industry') and user.industry else "Other"
             
-            # Ensure the industry is valid, default to "Other" if not
-            if user_industry not in [ind.value for ind in Industry]:
-                user_industry = Industry.OTHER.value
+            if user_industry not in industry_stats:
+                industry_stats[user_industry] = {"total": 0, "activated": 0}
             
             industry_stats[user_industry]["total"] += 1
             if user.profile_completion >= 80:

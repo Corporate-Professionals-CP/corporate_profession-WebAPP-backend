@@ -6,7 +6,7 @@ from app.crud.connection import get_potential_connections
 from app.models.user import User
 from app.models.connection import Connection
 from app.schemas.connection import ConnectionStatus
-from app.schemas.enums import Industry, ExperienceLevel
+from app.schemas.enums import ExperienceLevel
 
 
 def test_connection_suggestions_prioritization():

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_serializer, HttpUrl
 from app.schemas.user import UserPublic
-from app.schemas.enums import Industry, PostType, ExperienceLevel, PostVisibility
+from app.schemas.enums import PostType, ExperienceLevel, PostVisibility
 from pydantic import validator, field_validator
 
 
@@ -18,7 +18,7 @@ class PostBase(BaseModel):
     title: Optional[str] = Field(None, nullable=True)
     content: str = Field(..., min_length=10, max_length=2000)
     post_type: PostType
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
     experience_level: Optional[ExperienceLevel] = None
     job_title: Optional[str] = None
@@ -48,7 +48,7 @@ class PostUpdate(BaseModel):
     title: Optional[str] = Field(None, nullable=True)
     content: Optional[str] = Field(None, min_length=10, max_length=2000)
     post_type: Optional[PostType] = None
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     experience_level: Optional[ExperienceLevel] = None
     job_title: Optional[str] = None
     skills: Optional[List[str]] = None
@@ -89,7 +89,7 @@ class PostRead(BaseModel):
     title: Optional[str] = Field(None, nullable=True)
     content: str = Field(..., max_length=2000)  # Removed min_length for existing data
     post_type: PostType
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     visibility: PostVisibility = Field(default=PostVisibility.PUBLIC)
     experience_level: Optional[ExperienceLevel] = None
     job_title: Optional[str] = None
@@ -150,7 +150,7 @@ class PostRead(BaseModel):
 class PostSearch(BaseModel):
     """Schema for post search/filter parameters"""
     query: Optional[str] = Field(None, description="Search by keywords in title/content")
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     post_type: Optional[PostType] = None
     job_title: Optional[str] = None
     experience_level: Optional[ExperienceLevel] = None
@@ -178,7 +178,7 @@ class PostSearch(BaseModel):
         json_schema_extra = {
             "example": {
                 "query": "software engineer",
-                "industry": Industry.TECHNOLOGY,
+                "industry": "Technology",
                 "post_type": PostType.JOB_POSTING,
                 "skills": ["Figma", "UI/UX"],
                 "created_after": "2024-01-01T00:00:00",

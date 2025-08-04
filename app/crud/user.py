@@ -32,7 +32,6 @@ from app.schemas.user import (
 )
 from pydantic import HttpUrl
 from app.schemas.enums import (
-    Industry,
     ExperienceLevel
 )
 from app.core.exceptions import CustomHTTPException
@@ -285,7 +284,7 @@ async def search_users(
     session: AsyncSession,
     *,
     query: Optional[str] = None,
-    industry: Optional[Industry] = None,
+    industry: Optional[str] = None,
     experience: Optional[ExperienceLevel] = None,
     location: Optional[str] = None,
     skills: Optional[str] = None,
@@ -393,7 +392,7 @@ async def get_filtered_users(
     is_active: Optional[bool] = None,
     is_verified: Optional[bool] = None,
     recruiter_tag: Optional[bool] = None,
-    industry: Optional[Industry] = None,
+    industry: Optional[str] = None,
     experience_level: Optional[ExperienceLevel] = None,
     skip: int = 0,
     limit: int = 100

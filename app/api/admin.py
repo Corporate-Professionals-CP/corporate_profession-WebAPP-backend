@@ -23,7 +23,7 @@ from app.schemas.user import UserRead, UserUpdate, UserDirectoryItem
 from app.schemas.post import PostRead, PostUpdate
 from app.schemas.skill import SkillRead
 from app.core.security import get_current_active_admin
-from app.schemas.enums import Industry, ExperienceLevel, PostVisibility
+from app.schemas.enums import ExperienceLevel, PostVisibility
 from app.crud import (
     user as crud_user,
     post as crud_post,
@@ -51,7 +51,7 @@ router = APIRouter(
 
 class DropdownUpdate(BaseModel):
     job_titles: Optional[List[str]] = None
-    industries: Optional[List[Industry]] = None
+    industries: Optional[List[str]] = None
     skills: Optional[List[SkillRead]] = None
     experience_levels: Optional[List[ExperienceLevel]] = None
 
@@ -70,7 +70,7 @@ class UserSearchFilters(BaseModel):
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
     recruiter_tag: Optional[bool] = None
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     experience_level: Optional[ExperienceLevel] = None
 
 class BulkActionRequest(BaseModel):
@@ -98,7 +98,7 @@ class EnhancedUserSearchRequest(BaseModel):
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
     recruiter_tag: Optional[bool] = None
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     experience_level: Optional[ExperienceLevel] = None
     
     # Enhanced filters (new)
@@ -270,7 +270,7 @@ async def admin_update_user(
 @router.get("/posts/", response_model=List[PostRead])
 async def admin_list_posts(
     is_active: Optional[bool] = Query(None),
-    industry: Optional[Industry] = Query(None),
+    industry: Optional[str] = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),

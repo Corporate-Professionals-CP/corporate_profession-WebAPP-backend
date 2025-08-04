@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel
-from app.schemas.enums import Industry, ExperienceLevel
+from app.schemas.enums import ExperienceLevel
 
 class LocationFilter(BaseModel):
     """Structured location filtering"""
@@ -10,7 +10,7 @@ class LocationFilter(BaseModel):
 class DirectorySearchParams(BaseModel):
     """Search parameters for professional directory"""
     q: Optional[str] = None  # Combined search field
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     experience: Optional[ExperienceLevel] = None
     location: Optional[LocationFilter] = None
     skill: Optional[str] = None

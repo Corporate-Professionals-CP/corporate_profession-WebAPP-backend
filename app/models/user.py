@@ -14,7 +14,6 @@ from app.models.work_experience import WorkExperience
 from app.models.certification import Certification
 from app.models.notification import Notification
 from app.schemas.enums import (
-    Industry,
     ExperienceLevel,
     Gender,
     ProfileVisibility
@@ -46,7 +45,7 @@ class UserBase(SQLModel):
     )
     company: Optional[str] = Field(default=None, min_length=2, max_length=100)
     job_title: Optional[str] = Field(default=None, min_length=2, max_length=100)
-    industry: Optional[Industry] = Field(default=None)
+    industry: Optional[str] = Field(default=None)
     years_of_experience: Optional[ExperienceLevel] = Field(default=None)
     location: Optional[str] = Field(default=None, min_length=2, max_length=100)
 
@@ -71,7 +70,7 @@ class User(UserBase, table=True):
     """Complete user model with all requirements"""
     id: str = Field(default_factory=generate_uuid, primary_key=True)
 
-    industry: Optional[Industry] = Field(default=None, nullable=True)
+    industry: Optional[str] = Field(default=None, nullable=True)
     years_of_experience: Optional[ExperienceLevel] = Field(default=None, nullable=True)
     location: Optional[str] = Field(default=None, nullable=True)
 

@@ -21,7 +21,7 @@ from app.models.post_comment import PostComment
 from app.models.post_reaction import PostReaction
 from app.models.follow import UserFollow
 
-from app.schemas.enums import Industry, PostType, PostVisibility, ExperienceLevel
+from app.schemas.enums import PostType, PostVisibility, ExperienceLevel
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -65,7 +65,7 @@ class Post(SQLModel, table=True):
         index=True,
         max_length=50
     )
-    industry: Optional[Industry] = Field(default=None, index=True)
+    industry: Optional[str] = Field(default=None, index=True)
     experience_level: Optional[ExperienceLevel] = Field(default=None)
 
     status: PostStatus = Field(default=PostStatus.PUBLISHED, index=True)
@@ -203,7 +203,7 @@ class PostCreate(SQLModel):
     title: str
     content: str
     post_type: PostType
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     tags: Optional[List[str]] = []
     job_title: Optional[str] = None
     expires_at: Optional[datetime] = None

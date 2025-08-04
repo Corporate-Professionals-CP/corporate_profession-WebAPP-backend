@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, SecretStr, validator, Field, HttpUrl, field_serializer
 from app.schemas.enums import (
-    Industry,
     ExperienceLevel,
     Gender,
     ProfileVisibility
@@ -24,7 +23,7 @@ class UserBase(BaseModel):
         example="Marketing professional passionate about brand growth"
     )
     status: Optional[str] = None
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     years_of_experience: Optional[ExperienceLevel] = None
     Location: Optional[str] = Field(None, min_length=2, max_length=100)
     visibility: Optional[ProfileVisibility] = Field(
@@ -72,7 +71,7 @@ class UserUpdate(BaseModel):
     work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)
     education: Optional[List[EducationRead]] = Field(default_factory=list)
     contact: Optional[List[ContactRead]] = Field(default_factory=list)
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     years_of_experience: Optional[ExperienceLevel] = None
     location: Optional[str] = None
     age: Optional[int] = None
@@ -96,7 +95,7 @@ class UserPublic(UserBase):
     age: Optional[int]
     status: Optional[str]
     sex: Optional[Gender]
-    industry: Optional[Industry]
+    industry: Optional[str]
     work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)
     education: Optional[List[EducationRead]] = Field(default_factory=list)
     contact: Optional[List[ContactRead]] = Field(default_factory=list)
@@ -141,7 +140,7 @@ class UserDirectoryItem(BaseModel):
     profile_image_url: Optional[str] = None
     job_title: Optional[str]
     company: Optional[str]
-    industry: Optional[Industry]
+    industry: Optional[str]
     skills: List[str] = Field(default_factory=list)
 
 
@@ -191,7 +190,7 @@ class UserProfileResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     profile_image_url: Optional[str]
-    industry: Optional[Industry]
+    industry: Optional[str]
     location: Optional[str] = None
     visibility: Optional[ProfileVisibility]
     linkedin_profile: Optional[HttpUrl] = None

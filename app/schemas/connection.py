@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from app.schemas.enums import ConnectionStatus
 from app.schemas.user import UserPublic
-from app.schemas.enums import ConnectionStatus, Gender, Industry, ExperienceLevel, ProfileVisibility
+from app.schemas.enums import ConnectionStatus, Gender, ExperienceLevel, ProfileVisibility
 from app.schemas.skill import SkillRead
 
 class ConnectionUser(BaseModel):
@@ -13,7 +13,7 @@ class ConnectionUser(BaseModel):
     headline: Optional[str] = None
     location: Optional[str] = None
     pronouns: Optional[str] = None
-    industry: Optional[Industry] = None
+    industry: Optional[str] = None
     years_of_experience: Optional[ExperienceLevel] = None
     job_title: Optional[str] = None
     profile_image_url: Optional[str] = None
