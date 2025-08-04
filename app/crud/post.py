@@ -23,7 +23,7 @@ from app.models.skill import Skill
 from app.models.follow import UserFollow
 from app.models.connection import Connection
 from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead, ReactionBreakdown, PostSearchResponse, UserReactionStatus
-from app.schemas.enums import Industry, PostType, PostVisibility
+from app.schemas.enums import PostType, PostVisibility
 from app.core.security import get_current_active_user
 from sqlalchemy.orm import selectinload, Mapped
 from collections import defaultdict
