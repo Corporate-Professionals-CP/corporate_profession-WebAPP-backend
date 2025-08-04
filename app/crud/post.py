@@ -465,7 +465,7 @@ async def get_filtered_posts(
     *,
     deleted: Optional[bool] = None,
     is_active: Optional[bool] = None,
-    industry: Optional[Industry] = None,
+    industry: Optional [str] = None,
     offset: int = 0,
     limit: int = 100
 ) -> List[Post]:
