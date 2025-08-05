@@ -6,6 +6,7 @@ from app.db.database import get_db
 from app.core.security import verify_token, get_user_by_id, get_current_active_user
 from app.models.user import User
 from app.models.notification import Notification
+from app.crud.user import generate_avatar_fallback
 from app.schemas.notification import NotificationRead, NotificationResponse, NotificationReadResponse, NotificationNavigation
 from app.crud import notification as notif_crud
 from sqlalchemy import select, func
@@ -104,9 +105,6 @@ async def read_notification(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification not found"
         )
-    
-    # Convert notification to response format
-    from app.crud.user import generate_avatar_fallback
     
     # Prepare actor data if available
     actor_data = None

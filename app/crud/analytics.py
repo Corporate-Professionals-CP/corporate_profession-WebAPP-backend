@@ -20,6 +20,7 @@ from app.models.post import Post
 from app.models.connection import Connection, ConnectionStatus
 from app.models.post_comment import PostComment
 from app.models.post_reaction import PostReaction
+from app.models.bookmark import Bookmark
 from app.schemas.analytics import TimeRange, AnalyticsFilterRequest, MetricTrend
 from app.schemas.enums import PostType
 
@@ -977,9 +978,55 @@ class AnalyticsService:
     
     async def _get_average_engagement_rate(self, start_date: datetime, end_date: datetime) -> float:
         """Get average engagement rate"""
-        # This would implement logic to calculate engagement rate
-        # For now, return placeholder
-        return 0.0
+        # Get posts within the date range
+        posts_query = select(Post).where(
+            and_(
+                Post.created_at >= start_date,
+                Post.created_at <= end_date,
+                Post.deleted == False
+            )
+        )
+        
+        result = await self.db.execute(posts_query)
+        posts = result.scalars().all()
+        
+        if not posts:
+            return 0.0
+        
+        total_engagement_rate = 0.0
+        valid_posts_count = 0
+        
+        for post in posts:
+            # Count total engagements for this post
+            likes_count = await self.db.scalar(
+                select(func.count(PostReaction.user_id)).where(
+                    PostReaction.post_id == post.id
+                )
+            ) or 0
+            
+            comments_count = await self.db.scalar(
+                select(func.count(PostComment.id)).where(
+                    PostComment.post_id == post.id
+                )
+            ) or 0
+            
+            bookmarks_count = await self.db.scalar(
+                select(func.count(Bookmark.id)).where(
+                    Bookmark.post_id == post.id
+                )
+            ) or 0
+            
+            total_engagements = likes_count + comments_count + bookmarks_count
+            view_count = post.engagement.get("view_count", 1) if post.engagement else 1
+            
+            # Calculate engagement rate for this post
+            if view_count > 0:
+                engagement_rate = total_engagements / view_count
+                total_engagement_rate += engagement_rate
+                valid_posts_count += 1
+        
+        # Return average engagement rate
+        return total_engagement_rate / valid_posts_count if valid_posts_count > 0 else 0.0
     
     async def _get_engagement_by_post_type(self, start_date: datetime, end_date: datetime) -> Dict[str, Dict[str, float]]:
         """Get engagement metrics by post type"""
