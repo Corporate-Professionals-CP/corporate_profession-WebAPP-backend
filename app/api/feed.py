@@ -10,13 +10,14 @@ from pydantic import BaseModel, field_serializer
 from datetime import datetime, timedelta
 from app.db.database import get_db
 from app.models.post import Post, PostType, PostStatus
+from app.schemas.enums import PostVisibility
 from app.schemas.post import PostRead
 from app.core.security import get_current_user
 from app.crud.post import get_feed_posts, enrich_multiple_posts_optimized
 from app.crud.connection import get_my_connections
 from app.models.user import User
 from app.models.connection import Connection, ConnectionStatus
-from app.models.follow import UserFollow
+
 from app.utils.feed_cookies import (
     track_seen_posts,
     get_seen_posts_from_request
@@ -56,6 +57,8 @@ async def get_personalized_feed(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Note: New users without industry can access feed to see sample content
+    # Industry validation removed to improve onboarding experience
     try:
         # Create cache key based on request parameters
         cache_key = f"{post_type}:{recent_days}:{cursor}:{limit}"
@@ -122,7 +125,9 @@ async def get_network_feed(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get posts from followed users and connections with recency prioritization"""
+    # Note: New users without industry can access network feed
+    # They will see limited content to encourage profile completion
+    """Get posts from connected users with recency prioritization"""
     try:
         cutoff_date = datetime.utcnow() - timedelta(days=recent_days) if recent_days else None
         user_id = str(current_user.id)
@@ -151,23 +156,19 @@ async def get_network_feed(
                     error_code=INVALID_CURSOR_FORMAT
                 )
 
-        # Get network user IDs (followed + connected)
-        follow_stmt = select(UserFollow.followed_id).where(UserFollow.follower_id == user_id)
-        follow_result = await db.execute(follow_stmt)
-        followed_user_ids = set(follow_result.scalars().all())
-
+        # Get network user IDs (connected users only)
         connections = await get_my_connections(db, user_id)
         connected_user_ids = set()
         for conn in connections:
             other_user = conn.sender_id if conn.sender_id != user_id else conn.receiver_id
             connected_user_ids.add(other_user)
 
-        allowed_user_ids = followed_user_ids.union(connected_user_ids)
+        allowed_user_ids = connected_user_ids
         if not allowed_user_ids:
             logger.warning(f"No network connections found for user {user_id}")
             return FeedResponse(main_posts=[], fresh_posts=[], next_cursor=None)
 
-        logger.info(f"Network feed for user {user_id}: {len(followed_user_ids)} followed, {len(connected_user_ids)} connected, {len(allowed_user_ids)} total network users")
+        logger.info(f"Network feed for user {user_id}: {len(connected_user_ids)} connected users in network")
 
         # Engagement score calculation
         engagement_score = (
@@ -200,16 +201,36 @@ async def get_network_feed(
                 Post.expires_at.is_(None),
                 Post.expires_at > datetime.utcnow()
             ),
-            # Visibility conditions
+            # Network visibility based on user's industry status
             or_(
-                Post.visibility == "public",
+                # Always show posts with followers visibility from connected users
                 and_(
-                    Post.visibility == "industry",
-                    Post.industry == current_user.industry
+                    Post.visibility == PostVisibility.FOLLOWERS,
+                    Post.user_id.in_(connected_user_ids)
                 ),
+                # For users with industry - strict industry filtering
                 and_(
-                    Post.visibility == "followers",
-                    Post.user_id.in_(followed_user_ids)
+                    current_user.industry is not None,
+                    or_(
+                        # Public posts from same industry network connections
+                        and_(
+                            Post.visibility == PostVisibility.PUBLIC,
+                            Post.industry == current_user.industry,
+                            Post.industry.isnot(None)
+                        ),
+                        # Industry posts from same industry
+                        and_(
+                            Post.visibility == PostVisibility.INDUSTRY,
+                            Post.industry == current_user.industry,
+                            Post.industry.isnot(None)
+                        )
+                    )
+                ),
+                # For new users without industry - show public posts from network
+                and_(
+                    current_user.industry is None,
+                    Post.visibility == PostVisibility.PUBLIC,
+                    Post.created_at > datetime.utcnow() - timedelta(days=3)  # Recent posts only
                 )
             )
         ]
@@ -307,6 +328,8 @@ async def refresh_feed(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Note: New users without industry can access feed refresh
+    # Consistent with main feed access for better onboarding
     """
     Get the most recent posts for feed refresh after creating a new post
     Returns only the freshest posts to avoid duplicates

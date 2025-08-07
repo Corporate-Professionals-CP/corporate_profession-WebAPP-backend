@@ -23,7 +23,7 @@ from app.models.skill import Skill
 from app.models.follow import UserFollow
 from app.models.connection import Connection
 from app.schemas.post import PostCreate, PostUpdate, PostSearch, PostRead, ReactionBreakdown, PostSearchResponse, UserReactionStatus
-from app.schemas.enums import PostType, PostVisibility
+from app.schemas.enums import PostType, PostVisibility, ConnectionStatus
 from app.core.security import get_current_active_user
 from sqlalchemy.orm import selectinload, Mapped
 from collections import defaultdict
@@ -518,12 +518,26 @@ async def get_feed_posts(
     very_recent_threshold = datetime.utcnow() - timedelta(minutes=15)
     recent_threshold = datetime.utcnow() - timedelta(hours=6)
 
-    # Get followed users with a single query - use indexes
-    followed_users = await session.execute(
-        select(UserFollow.followed_id)
-        .where(UserFollow.follower_id == str(current_user.id))
+    # Get connected users with a single query - use indexes
+    connected_users = await session.execute(
+        select(Connection.sender_id, Connection.receiver_id)
+        .where(
+            or_(
+                Connection.sender_id == str(current_user.id),
+                Connection.receiver_id == str(current_user.id)
+            ),
+            Connection.status == ConnectionStatus.ACCEPTED.value
+        )
     )
-    followed_ids = [str(u[0]) for u in followed_users.all()]
+    
+    # Extract connected user IDs (excluding current user)
+    connected_ids = []
+    for connection in connected_users.all():
+        sender_id, receiver_id = connection
+        if sender_id == str(current_user.id):
+            connected_ids.append(receiver_id)
+        else:
+            connected_ids.append(sender_id)
 
     # Simplified engagement score calculation
     engagement_score = (
@@ -541,30 +555,62 @@ async def get_feed_posts(
         else_=engagement_score
     ).label("priority_score")
 
-    # Base query conditions - optimized for indexes
+    # Professional networking focused conditions with new user onboarding support
     base_conditions = [
         Post.status == PostStatus.PUBLISHED,
-        Post.deleted == False,
-        # Simplified visibility - use index on visibility column
-        or_(
-            Post.visibility == PostVisibility.PUBLIC,
-            and_(
-                Post.visibility == PostVisibility.INDUSTRY,
-                Post.industry == current_user.industry
-            ),
-            Post.user_id == str(current_user.id)
-        )
+        Post.deleted == False
     ]
     
-    # Add followed users condition separately for better query planning
-    if followed_ids:
-        base_conditions.append(
-            or_(
+    # Different visibility logic based on whether user has industry set
+    if current_user.industry:
+        # Existing users with industry - strict professional networking
+        visibility_conditions = or_(
+            # Own posts - always visible
+            Post.user_id == str(current_user.id),
+            # Posts from connected users (all visibility levels)
+            and_(
+                Post.user_id.in_(connected_ids) if connected_ids else False,
+                or_(
+                    Post.visibility == PostVisibility.PUBLIC,
+                    Post.visibility == PostVisibility.INDUSTRY,
+                    Post.visibility == PostVisibility.FOLLOWERS
+                )
+            ),
+            # Industry-specific posts from same industry professionals
+            and_(
+                Post.visibility == PostVisibility.INDUSTRY,
+                Post.industry == current_user.industry,
+                Post.industry.isnot(None)
+            ),
+            # Public posts ONLY from same industry
+            and_(
                 Post.visibility == PostVisibility.PUBLIC,
-                Post.user_id.in_(followed_ids),
-                Post.user_id == str(current_user.id)
+                Post.industry == current_user.industry,
+                Post.industry.isnot(None)
             )
         )
+    else:
+        # New users without industry - show sample content for onboarding
+        visibility_conditions = or_(
+            # Own posts - always visible
+            Post.user_id == str(current_user.id),
+            # Posts from connected users (if any)
+            and_(
+                Post.user_id.in_(connected_ids) if connected_ids else False,
+                or_(
+                    Post.visibility == PostVisibility.PUBLIC,
+                    Post.visibility == PostVisibility.FOLLOWERS
+                )
+            ),
+            # Sample public posts for onboarding (limited to recent, high-engagement)
+            and_(
+                Post.visibility == PostVisibility.PUBLIC,
+                Post.created_at > datetime.utcnow() - timedelta(days=7),  # Recent posts only
+                func.coalesce(Post.engagement["view_count"].astext.cast(Float), 0) > 10  # Popular posts
+            )
+        )
+    
+    base_conditions.append(visibility_conditions)
     
     if post_type:
         base_conditions.append(Post.post_type == post_type)
