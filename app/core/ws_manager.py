@@ -34,6 +34,11 @@ class NotificationManager:
                 self._store_pending(user_id, notification)
         except Exception as e:
             logger.error(f"Error sending notification to {user_id}: {str(e)}")
+            # Store as pending if sending failed, even if user was in active connections
+            self._store_pending(user_id, notification)
+            # Remove the failed connection
+            if user_id in self.active_connections:
+                del self.active_connections[user_id]
 
     def _store_pending(self, user_id: str, notification: dict):
         if user_id not in self.pending_notifications:
