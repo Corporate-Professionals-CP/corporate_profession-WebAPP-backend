@@ -826,7 +826,7 @@ async def search_jobs_by_criteria(
     stmt = (
         select(Post)
         .where(Post.post_type == PostType.JOB_POSTING)
-        .options(selectinload(Post.skills))
+        .options(selectinload(Post.skills), selectinload(Post.user))
     )
 
     # Filter to followed users if applicable
