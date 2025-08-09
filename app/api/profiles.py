@@ -19,6 +19,7 @@ from app.schemas.user import UserRead, UserPublic, UserUpdate, UserProfileComple
 from app.core.security import get_current_active_user, get_current_active_admin
 from app.crud.user import (
     get_user_by_id,
+    get_user_by_id_with_relationships,
     update_user,
     upload_user_cv,
     delete_user_cv,
@@ -82,7 +83,7 @@ async def get_profile(
 ):
     is_owner_or_admin = str(current_user.id) == str(user_id) or current_user.is_admin
 
-    user = await get_user_by_id(db, user_id)
+    user = await get_user_by_id_with_relationships(db, user_id)
     if not user:
         raise CustomHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -117,6 +118,7 @@ async def get_profile(
             contact=contact,
             location=user.location,
             profile_image_url=user.profile_image_url,
+            skills=user.skills or [],
             avatar_text=initials,
             avatar_color=color
         )

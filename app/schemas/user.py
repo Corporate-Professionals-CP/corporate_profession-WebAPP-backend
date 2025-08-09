@@ -198,6 +198,7 @@ class UserProfileResponse(BaseModel):
     work_experience: Optional[List[WorkExperienceRead]] = Field(default_factory=list)
     education: Optional[List[EducationRead]] = Field(default_factory=list)
     contact: Optional[List[ContactRead]] = Field(default_factory=list)
+    skills: List[SkillRead] = Field(default_factory=list)
     avatar_text: Optional[str] = Field(default=None, description="Fallback initials or avatar text")
     avatar_color: Optional[str] = Field(default=None, description="Fallback avatar color hex")
 
