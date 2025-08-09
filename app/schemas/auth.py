@@ -1,6 +1,6 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional, List
 from app.schemas.user import UserRead
 
 class Token(BaseModel):
@@ -36,6 +36,10 @@ class UserCreateWithGoogle(BaseModel):
     """User creation schema for Google OAuth"""
     google_token: str
     recruiter_tag: bool = False
+    skills: Optional[List[int]] = Field(
+        default_factory=list,
+        description="List of skill IDs to associate with the user during signup"
+    )
 
 class SignupResponse(BaseModel):
     access_token: str

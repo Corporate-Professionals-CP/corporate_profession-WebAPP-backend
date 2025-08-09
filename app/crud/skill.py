@@ -89,3 +89,42 @@ async def remove_user_skill(db: AsyncSession, user_id: str, skill_id: int):
             detail="Failed to remove skill from user"
         )
 
+
+async def add_user_skills_bulk(db: AsyncSession, user_id: str, skill_ids: List[int]):
+    """Associate multiple skills with a user during signup"""
+    if not skill_ids:
+        return
+    
+    try:
+        # Verify all skill IDs exist
+        existing_skills = await get_by_ids(db, skill_ids)
+        existing_skill_ids = {skill.id for skill in existing_skills}
+        
+        invalid_ids = set(skill_ids) - existing_skill_ids
+        if invalid_ids:
+            raise CustomHTTPException(
+                status_code=400,
+                detail=f"Invalid skill IDs: {list(invalid_ids)}"
+            )
+        
+        # Create associations
+        associations = [UserSkill(user_id=user_id, skill_id=skill_id) for skill_id in skill_ids]
+        db.add_all(associations)
+        await db.commit()
+        
+    except CustomHTTPException:
+        await db.rollback()
+        raise
+    except IntegrityError:
+        await db.rollback()
+        raise CustomHTTPException(
+            status_code=400,
+            detail="One or more skills are already associated with this user"
+        )
+    except Exception:
+        await db.rollback()
+        raise CustomHTTPException(
+            status_code=500,
+            detail="Failed to associate skills with user"
+        )
+

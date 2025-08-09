@@ -34,6 +34,7 @@ from app.models.user import User
 from starlette.status import *
 from app.core.config import settings
 from app.crud.user import get_user_by_email, create_user, update_user, get_user_by_id, get_user_by_email_or_username
+from app.crud.skill import add_user_skills_bulk
 from app.core.email import send_verification_email, send_password_reset_email
 from pydantic import parse_obj_as
 from app.utils.activity_logger import log_user_activity
@@ -291,6 +292,10 @@ async def signup(
     # Create new user
     user = await create_user(db, user_in)
 
+    # Add skills to user if provided
+    if user_in.skills:
+        await add_user_skills_bulk(db, str(user.id), user_in.skills)
+
     # Generate tokens
     access_token = create_access_token(user_id=str(user.id))
     refresh_token = create_refresh_token(user_id=str(user.id))
@@ -434,6 +439,10 @@ async def signup_with_google(
             "recruiter_tag": user_in.recruiter_tag
         }
         user = await create_user(db, user_data)
+
+        # Add skills to user if provided
+        if user_in.skills:
+            await add_user_skills_bulk(db, str(user.id), user_in.skills)
 
         # Generate tokens (same as regular signup)
         access_token = create_access_token(user_id=str(user.id))
