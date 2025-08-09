@@ -6,7 +6,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.exceptions import RequestValidationError
 from app.core.config import settings
 from app.db.database import init_db, async_engine
-from app.api import auth, admin, analytics, bookmarks, certification, comments, contacts, directory, education, feed, follow, moderator, network, notification, posts, post_media, post_reaction, profiles, reports, skill, skill_catalog, volunteering, work_experiences
+from app.api import auth, admin, analytics, bookmarks, certification, comments, companies, contacts, directory, education, feed, follow, mentions, moderator, network, notification, posts, post_media, post_reaction, profiles, reports, skill, skill_catalog, volunteering, work_experiences
 from app.core.exceptions import validation_exception_handler, http_exception_handler
 from fastapi.exception_handlers import http_exception_handler as default_http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -84,12 +84,14 @@ api_router.include_router(analytics.router, tags=["Analytics"])
 api_router.include_router(bookmarks.router, tags=["bookmarks"])
 api_router.include_router(certification.router, tags=["certification"])
 api_router.include_router(comments.router, tags=["Comments"])
+api_router.include_router(companies.router, tags=["Companies"])
 api_router.include_router(network.router, tags=["Connections"])
 api_router.include_router(contacts.router, tags=["contacts"])
 api_router.include_router(directory.router, tags=["Directory"])
 api_router.include_router(education.router, tags=["education"])
 api_router.include_router(feed.router, tags=["feed"])
 api_router.include_router(follow.router, tags=["follow"])
+api_router.include_router(mentions.router, tags=["Mentions"])
 api_router.include_router(moderator.router, tags=["Moderation"])
 api_router.include_router(notification.router, tags=["notifications"])
 api_router.include_router(posts.router, tags=["Posts"])

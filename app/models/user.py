@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from app.models.bookmark import Bookmark
     from app.models.connection import Connection
     from app.models.reports import Report, UserOffenseLog, UserSafetyStatus
+    from app.models.company import CompanyAdmin, CompanyFollower
+    from app.models.post_mention import PostMention
 
 
 def generate_uuid() -> str:
@@ -247,6 +249,38 @@ class User(UserBase, table=True):
     )
 
     profile_completion: float = Field(default=0.0, ge=0.0, le=100.0)
+    
+    # Company relationships
+    company_admin_roles: List["CompanyAdmin"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={
+            "foreign_keys": "[CompanyAdmin.user_id]",
+            "lazy": "selectin"
+        }
+    )
+    
+    company_follows: List["CompanyFollower"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={
+            "foreign_keys": "[CompanyFollower.user_id]",
+            "lazy": "selectin"
+        }
+    )
+    
+    # Mention relationships
+    mentions_received: List["PostMention"] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[PostMention.mentioned_user_id]",
+            "lazy": "selectin"
+        }
+    )
+    
+    mentions_made: List["PostMention"] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[PostMention.mentioned_by_user_id]",
+            "lazy": "selectin"
+        }
+    )
 
     def set_password(self, password: str):
         """Hash and store password securely"""

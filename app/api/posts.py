@@ -51,6 +51,7 @@ router = APIRouter(prefix="/posts", tags=["posts"])
 async def create_new_post(
     *,
     post_in: PostCreate,
+    company_id: Optional[str] = Query(None, description="Company ID for company posts"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -78,7 +79,12 @@ async def create_new_post(
     # Reduced validation for job posts - only basic content validation remains
     # job_title, skills, and industry are now optional for easier posting
 
-    return await create_post(db, post_in, current_user)
+    return await create_post(
+        session=db,
+        post_data=post_in,
+        current_user=current_user,
+        company_id=company_id
+    )
 
 @router.post("/search", response_model=PostSearchResponse)
 async def search_posts_endpoint(

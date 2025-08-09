@@ -26,6 +26,8 @@ from app.schemas.enums import PostType, PostVisibility, ExperienceLevel
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.bookmark import Bookmark
+    from app.models.company import Company
+    from app.models.post_mention import PostMention
 
 class PostStatus(str, Enum):
     DRAFT = "draft"
@@ -102,8 +104,13 @@ class Post(SQLModel, table=True):
     def skill_names(self, value: list[str]) -> None:
         pass #read-only setup
 
-    user_id: str = Field(foreign_key="user.id", nullable=False)
-    user: Mapped["User"] = Relationship(
+    user_id: Optional[str] = Field(foreign_key="user.id", nullable=True)
+    company_id: Optional[str] = Field(foreign_key="company.id", nullable=True)
+    
+    user: Mapped[Optional["User"]] = Relationship(
+        back_populates="posts")
+    
+    company: Mapped[Optional["Company"]] = Relationship(
         back_populates="posts")
 
     skills: Mapped[List["Skill"]] = Relationship(
@@ -162,6 +169,12 @@ class Post(SQLModel, table=True):
     original_post_info: Optional[Dict] = Field(
         default=None,
         sa_column=Column(JSON, nullable=True)
+    )
+    
+    # User mentions in this post
+    mentions: Mapped[List["PostMention"]] = Relationship(
+        back_populates="post",
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
 
 

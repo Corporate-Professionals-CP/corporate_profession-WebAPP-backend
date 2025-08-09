@@ -29,6 +29,9 @@ from sqlalchemy.orm import selectinload, Mapped
 from collections import defaultdict
 from app.models.notification import Notification
 from app.crud.notification import create_notification
+from app.crud.post_mention import create_post_mentions
+from app.models.company import Company
+from app.crud.company import is_company_admin
 
 logger = logging.getLogger(__name__)
 from app.schemas.enums import NotificationType
@@ -36,10 +39,26 @@ from app.schemas.post import ReactionBreakdown, UserReactionStatus
 from app.models.post_reaction import ReactionType
 from app.crud.post_reaction import get_reactions_for_post
 
+
+async def is_company_admin_async(session: AsyncSession, company_id: str, user_id: str) -> bool:
+    """Async version to check if user is admin of company"""
+    from app.models.company import CompanyAdmin
+    result = await session.execute(
+        select(CompanyAdmin).where(
+            and_(
+                CompanyAdmin.company_id == company_id,
+                CompanyAdmin.user_id == user_id
+            )
+        )
+    )
+    admin = result.scalar_one_or_none()
+    return admin is not None
+
 async def create_post(
     session: AsyncSession,
     post_data: PostCreate,
-    current_user: User
+    current_user: User,
+    company_id: Optional[str] = None
 ) -> PostRead:
     """
     Optimized post creation with enhanced validation and error handling
@@ -82,20 +101,71 @@ async def create_post(
         # Resolve skills first
         resolved_skills = await _resolve_skills(session, post_data.skills)
 
-        # Create post instance
-        db_post = Post(
-            **post_dict,
-            user_id=str(current_user.id),
-            skills=resolved_skills,
-            tags=post_data.tags or [],
-            engagement=PostEngagement().dict(),
-            status=PostStatus.PUBLISHED,
-            published_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
-        )
+        # Handle company posts
+        if company_id:
+            # Verify user is admin of the company
+            if not await is_company_admin_async(session, company_id, str(current_user.id)):
+                raise HTTPException(
+                    status_code=403,
+                    detail="User is not authorized to post for this company"
+                )
+            
+            # Create post instance for company
+            db_post = Post(
+                **post_dict,
+                company_id=company_id,
+                user_id=None,  # Company posts don't have user_id
+                skills=resolved_skills,
+                tags=post_data.tags or [],
+                engagement=PostEngagement().dict(),
+                status=PostStatus.PUBLISHED,
+                published_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+        else:
+            # Create post instance for user
+            db_post = Post(
+                **post_dict,
+                user_id=str(current_user.id),
+                company_id=None,
+                skills=resolved_skills,
+                tags=post_data.tags or [],
+                engagement=PostEngagement().dict(),
+                status=PostStatus.PUBLISHED,
+                published_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
 
         session.add(db_post)
         await session.flush()
+        
+        # Handle user mentions in post content
+        if post_data.content:
+            try:
+                # Convert async session to sync for mention processing
+                from sqlmodel import Session
+                sync_session = Session(session.bind)
+                mentions = create_post_mentions(
+                    sync_session, 
+                    str(db_post.id), 
+                    post_data.content, 
+                    str(current_user.id)
+                )
+                
+                # Create notifications for mentioned users
+                for mention in mentions:
+                    await create_notification(
+                        session,
+                        recipient_id=mention.mentioned_user_id,
+                        sender_id=str(current_user.id),
+                        notification_type=NotificationType.MENTION,
+                        title="You were mentioned in a post",
+                        message=f"{current_user.full_name} mentioned you in a post",
+                        related_id=str(db_post.id)
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to process mentions: {e}")
+                # Don't fail post creation if mention processing fails
 
         # Eager load relationships needed for response
         result = await session.execute(
