@@ -3,6 +3,7 @@ from typing import Optional, TYPE_CHECKING
 from uuid import uuid4
 from datetime import datetime
 from sqlalchemy.orm import Mapped, relationship
+from sqlalchemy import Index
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -10,6 +11,16 @@ if TYPE_CHECKING:
 
 class PostMention(SQLModel, table=True):
     """Model for tracking user mentions in posts"""
+    __tablename__ = "post_mention"
+    __table_args__ = (
+        Index("ix_post_mention_mentioned_user_id", "mentioned_user_id"),
+        Index("ix_post_mention_post_id", "post_id"),
+        Index("ix_post_mention_mentioned_by_user_id", "mentioned_by_user_id"),
+        Index("ix_post_mention_created_at", "created_at"),
+        Index("ix_post_mention_user_date", "mentioned_user_id", "created_at"),
+        Index("ix_post_mention_post_date", "post_id", "created_at"),
+    )
+    
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     post_id: str = Field(foreign_key="post.id", nullable=False)
     mentioned_user_id: str = Field(foreign_key="user.id", nullable=False)
