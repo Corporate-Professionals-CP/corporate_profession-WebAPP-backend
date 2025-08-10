@@ -341,14 +341,14 @@ class User(UserBase, table=True):
             'job_title': 10,
             'skills': 15,
             'work_experiences': 15,
-            'educations': 15,
+            'linkedin_profile': 5,
+            'educations': 10,
         }
 
         optional_fields = {
             'years_of_experience': 5,
             'bio': 5,
             'certifications': 5,
-            'linkedin_profile': 5,
             'cv_url': 5,
             'volunteering_experiences': 5,
             'company': 5,
