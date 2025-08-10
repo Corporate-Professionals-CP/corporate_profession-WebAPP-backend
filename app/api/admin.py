@@ -19,9 +19,15 @@ from app.db.database import get_db
 from app.models.user import User
 from app.models.post import Post
 from app.models.connection import Connection
+from app.models.bookmark import Bookmark
+from app.models.post_reaction import PostReaction
+from app.models.post_comment import PostComment
 from app.schemas.user import UserRead, UserUpdate, UserDirectoryItem
 from app.schemas.post import PostRead, PostUpdate
 from app.schemas.skill import SkillRead
+from app.schemas.work_experience import WorkExperienceRead
+from app.schemas.education import EducationRead
+from app.schemas.contact import ContactRead
 from app.core.security import get_current_active_admin
 from app.schemas.enums import ExperienceLevel, PostVisibility
 from app.crud import (
@@ -30,6 +36,9 @@ from app.crud import (
     skill as crud_skill,
     job_title as crud_job_title
 )
+from app.crud.work_experience import get_user_work_experiences
+from app.crud.education import get_user_education
+from app.crud.contact import get_user_contacts
 from app.core.exceptions import CustomHTTPException
 from app.core.error_codes import (
     ADMIN_USER_NOT_FOUND,
@@ -89,9 +98,23 @@ class UserActivitySummary(BaseModel):
 
 class EnhancedUserDetails(BaseModel):
     user: UserRead
+    work_experiences: List[WorkExperienceRead] = []
+    education: List[EducationRead] = []
+    contacts: List[ContactRead] = []
     activity_summary: UserActivitySummary
     recent_activities: List[Dict[str, Any]]
     admin_notes: Optional[str]
+
+class PostAnalytics(BaseModel):
+    total_likes: int = 0
+    total_comments: int = 0
+    total_bookmarks: int = 0
+    engagement_rate: float = 0.0
+    virality_score: float = 0.0
+
+class EnhancedPostRead(BaseModel):
+    post: PostRead
+    analytics: PostAnalytics
 
 class EnhancedUserSearchRequest(BaseModel):
     # Basic filters (existing)
@@ -267,7 +290,7 @@ async def admin_update_user(
         await db.rollback()
         raise HTTPException(status_code=400, detail=f"Database error: {str(e)}")
 
-@router.get("/posts/", response_model=List[PostRead])
+@router.get("/posts/", response_model=List[EnhancedPostRead])
 async def admin_list_posts(
     is_active: Optional[bool] = Query(None),
     industry: Optional[str] = Query(None),
@@ -276,13 +299,50 @@ async def admin_list_posts(
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(get_current_active_admin),
 ):
-    return await crud_post.get_filtered_posts(
+    # Get posts
+    posts = await crud_post.get_filtered_posts(
         session=db,
         is_active=is_active,
         industry=industry,
         offset=offset,
         limit=limit
     )
+    
+    # Enhance posts with analytics
+    enhanced_posts = []
+    for post in posts:
+        # Get analytics for each post
+        likes_count = await db.scalar(
+            select(func.count(PostReaction.user_id)).where(PostReaction.post_id == post.id)
+        ) or 0
+        
+        comments_count = await db.scalar(
+            select(func.count(PostComment.id)).where(PostComment.post_id == post.id)
+        ) or 0
+        
+        bookmarks_count = await db.scalar(
+            select(func.count(Bookmark.id)).where(Bookmark.post_id == post.id)
+        ) or 0
+        
+        # Calculate engagement metrics
+        total_engagements = likes_count + comments_count + bookmarks_count
+        engagement_rate = total_engagements / max(1, post.engagement.get("view_count", 1)) if hasattr(post, 'engagement') and post.engagement else 0.0
+        virality_score = likes_count + (comments_count * 2) + (bookmarks_count * 1.5)
+        
+        analytics = PostAnalytics(
+            total_likes=likes_count,
+            total_comments=comments_count,
+            total_bookmarks=bookmarks_count,
+            engagement_rate=round(engagement_rate, 4),
+            virality_score=round(virality_score, 2)
+        )
+        
+        enhanced_posts.append(EnhancedPostRead(
+            post=post,
+            analytics=analytics
+        ))
+    
+    return enhanced_posts
 
 @router.patch("/posts/{post_id}/visibility", response_model=PostRead)
 async def admin_update_post_visibility(
@@ -476,6 +536,11 @@ async def get_enhanced_user_details(
             "sections": {}
         }
     
+    # Get user's work experiences, education, and contacts
+    work_experiences = await get_user_work_experiences(db, str(user_id)) or []
+    education = await get_user_education(db, str(user_id)) or []
+    contacts = await get_user_contacts(db, str(user_id)) or []
+    
     # Mock recent activities (will be implementing UserActivityLog later)
     recent_activities = [
         {
@@ -507,6 +572,9 @@ async def get_enhanced_user_details(
     
     return EnhancedUserDetails(
         user=user,
+        work_experiences=work_experiences,
+        education=education,
+        contacts=contacts,
         activity_summary=activity_summary,
         recent_activities=recent_activities,
         admin_notes=getattr(user, 'notes', None)

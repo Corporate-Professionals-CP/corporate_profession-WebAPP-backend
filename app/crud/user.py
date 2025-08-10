@@ -203,6 +203,8 @@ async def update_user(
 
     try:
         session.add(db_user)
+        # Update profile completion after any profile changes
+        db_user.update_profile_completion()
         await session.commit()
         await session.refresh(db_user)
         return db_user
@@ -468,6 +470,8 @@ async def upload_user_cv(
         user.cv_uploaded_at = datetime.utcnow()
 
         session.add(user)
+        # Update profile completion after CV upload
+        user.update_profile_completion()
         await session.commit()
         await session.refresh(user)
         return user
@@ -499,6 +503,8 @@ async def delete_user_cv(session: AsyncSession, user_id: UUID) -> User:
             
             user.cv_url = None
             user.cv_uploaded_at = None
+            # Update profile completion after CV deletion
+            user.update_profile_completion()
             await session.commit()
             await session.refresh(user)
         except Exception as e:
@@ -556,6 +562,8 @@ async def upload_user_profile_image(
         )
         user.profile_image_uploaded_at = datetime.utcnow()
 
+        # Update profile completion after profile image upload
+        user.update_profile_completion()
         await session.commit()
         await session.refresh(user)
         return user
@@ -594,6 +602,8 @@ async def delete_user_profile_image(session: AsyncSession, user_id: UUID) -> Non
         # On success, clear the DB field
         user.profile_image_url = None
         user.updated_at = datetime.utcnow()
+        # Update profile completion after profile image deletion
+        user.update_profile_completion()
         session.add(user)
         await session.commit()
     except CustomHTTPException:
