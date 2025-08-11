@@ -337,8 +337,52 @@ async def admin_list_posts(
             virality_score=round(virality_score, 2)
         )
         
+        # Create PostRead with proper field mapping
+        post_data = {
+            'id': post.id,
+            'title': post.title or 'Untitled',
+            'content': post.content,
+            'post_type': post.post_type,
+            'industry': post.industry,
+            'visibility': post.visibility,
+            'experience_level': post.experience_level,
+            'job_title': post.job_title,
+            'tags': post.tags or [],
+            'skills': post.skills or [],
+            'expires_at': post.expires_at,
+            'media_urls': post.media_urls,
+            'media_type': post.media_type,
+            'user': None,  # Will be populated if needed
+            'username': None,
+            'is_active': not post.deleted,  # Map deleted to is_active
+            'created_at': post.created_at,
+            'updated_at': post.updated_at,
+            'published_at': post.published_at,
+            'total_comments': comments_count,
+            'total_reposts': 0,  # Can be calculated if needed
+            'total_reactions': likes_count,
+            'is_bookmarked': False,
+            'has_reacted': False,
+            'reactions_breakdown': {},
+            'is_repost': post.is_repost or False,
+            'is_quote_repost': getattr(post, 'is_quote_repost', False),
+            'reposted_by': None,
+            'original_post_id': post.original_post_id,
+            'original_post_info': None
+        }
+        
+        # Handle original_post_info if it exists and has null title
+        if hasattr(post, 'original_post_info') and post.original_post_info:
+            if isinstance(post.original_post_info, dict):
+                original_info = post.original_post_info.copy()
+                if original_info.get('title') is None:
+                    original_info['title'] = 'Untitled'
+                post_data['original_post_info'] = original_info
+            else:
+                post_data['original_post_info'] = post.original_post_info
+        
         enhanced_posts.append(EnhancedPostRead(
-            post=post,
+            post=PostRead(**post_data),
             analytics=analytics
         ))
     

@@ -1104,7 +1104,14 @@ async def enrich_multiple_posts(
         
         # Handle repost enrichment - ensure original_post_info is available
         if post.is_repost and post.original_post_info:
-            enriched_data["original_post_info"] = post.original_post_info
+            # Ensure title is not None in existing original_post_info
+            if isinstance(post.original_post_info, dict):
+                original_info = post.original_post_info.copy()
+                if original_info.get('title') is None:
+                    original_info['title'] = 'Untitled'
+                enriched_data["original_post_info"] = original_info
+            else:
+                enriched_data["original_post_info"] = post.original_post_info
         elif post.is_repost and post.original_post_id:
             # If original_post_info is None but we have original_post_id, get it from database
             try:

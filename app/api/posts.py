@@ -290,16 +290,21 @@ async def repost_content(
 
     # Send notification (use repost_data["quote_repost"]["id"])
     if str(original_post.user_id) != str(current_user.id):
+        print(f"Creating repost notification for user {original_post.user_id} from {current_user.id}")
         await create_notification(
             db,
             Notification(
                 recipient_id=original_post.user_id,
                 actor_id=current_user.id,
                 type=NotificationType.POST_REPOST,
-                message=f"{current_user.full_name} reposted your post: '{(original_post.title or 'Untitled')[:30]}...'",
-                reference_id=repost_data["quote_repost"]["id"]
+                message=f"{current_user.full_name} reposted your post: '{(original_post.title or original_post.content[:30] or 'your post')[:30]}...'",
+                reference_id=repost_data["quote_repost"]["id"],
+                post_id=original_post.id
             )
         )
+        print(f"Repost notification created successfully")
+    else:
+        print(f"Skipping notification - user reposting their own post")
 
     return repost_data
 

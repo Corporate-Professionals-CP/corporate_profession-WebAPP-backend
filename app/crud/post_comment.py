@@ -3,11 +3,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from app.models.post_comment import PostComment
 from app.models.user import User
+from app.models.post import Post
+from app.models.notification import Notification
 from app.schemas.post_comment import PostCommentCreate, PostCommentUpdate
+from app.schemas.enums import NotificationType
 from typing import Optional, List
 from app.core.exceptions import CustomHTTPException
 from fastapi import HTTPException
 from sqlalchemy.orm import selectinload
+from app.crud.notification import create_notification
 
 async def create_comment(
     db: AsyncSession,
@@ -51,6 +55,33 @@ async def create_comment(
             comment.media_urls = comment.media_url.split(',')
         else:
             comment.media_urls = []
+        
+        # Create notification for post owner (if not commenting on own post)
+        try:
+            # Get the post to find the owner
+            post_result = await db.execute(select(Post).where(Post.id == post_id))
+            post = post_result.scalar_one_or_none()
+            
+            if post and post.user_id != user_id:
+                # Get the commenter's info
+                user_result = await db.execute(select(User).where(User.id == user_id))
+                commenter = user_result.scalar_one_or_none()
+                
+                if commenter:
+                    await create_notification(
+                        db,
+                        Notification(
+                            recipient_id=post.user_id,
+                            actor_id=user_id,
+                            type=NotificationType.POST_COMMENT,
+                            message=f"{commenter.full_name} commented on your post: '{data.content[:50] + '...' if len(data.content) > 50 else data.content}'",
+                            post_id=post_id,
+                            comment_id=comment.id
+                        )
+                    )
+        except Exception as notification_error:
+            # Log the error but don't fail the comment creation
+            print(f"Failed to create notification for comment: {notification_error}")
             
         return comment
     except Exception as e:

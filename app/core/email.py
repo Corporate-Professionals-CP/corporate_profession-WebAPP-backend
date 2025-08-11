@@ -43,7 +43,7 @@ async def send_verification_email(email: str, name: str, token: str) -> None:
     otp = await generate_otp()
     
     # Store the OTP in the user's record (we'll use profile_preferences field)
-    # This is a temporary solution - in production, consider a dedicated OTP storage
+    # This is a temporary solution
     
     context = {
         "name": name,
@@ -93,14 +93,19 @@ def should_send_email_notification(notification_type: NotificationType, user_pre
         "email_post_tag": True,
         "email_bookmark": False,
         "email_job_application": True,
-        "email_post_repost": False
+        "email_post_repost": True  # Changed to True to enable repost emails
     }
     
     # Get user's email preferences (stored in profile_preferences)
     email_prefs = user_preferences.get("email_notifications", default_email_settings)
     
+    logger.info(f"Checking email notification for {notification_type}")
+    logger.info(f"User preferences: {user_preferences}")
+    logger.info(f"Email prefs: {email_prefs}")
+    
     # Check if email notifications are globally enabled
     if not email_prefs.get("email_notifications_enabled", True):
+        logger.info(f"Email notifications globally disabled for {notification_type}")
         return False
     
     # Check specific notification type preference
@@ -119,8 +124,11 @@ def should_send_email_notification(notification_type: NotificationType, user_pre
     
     pref_key = notification_key_map.get(notification_type)
     if pref_key:
-        return email_prefs.get(pref_key, default_email_settings.get(pref_key, False))
+        result = email_prefs.get(pref_key, default_email_settings.get(pref_key, False))
+        logger.info(f"Email notification decision for {notification_type}: {result}")
+        return result
     
+    logger.warning(f"No email preference mapping found for {notification_type}")
     return False
 
 
@@ -145,6 +153,10 @@ NOTIFICATION_TEMPLATE_MAP = {
     NotificationType.CONNECTION_ACCEPTED: {
         "template": "connection_accepted",
         "subject": "Connection Request Accepted"
+    },
+    NotificationType.POST_REPOST: {
+        "template": "post_reaction",  # Reuse post_reaction template for now
+        "subject": "Your Post Was Reposted"
     }
 }
 
@@ -156,6 +168,8 @@ async def send_notification_email(
     actor_name: str = None,
     message: str = None,
     post_content: str = None,
+    post_id: str = None,
+    actor_id: str = None,
     **kwargs
 ) -> None:
     """Send notification email based on notification type"""
@@ -174,8 +188,8 @@ async def send_notification_email(
             "actor_name": actor_name or "Someone",
             "message": message or "",
             "post_content": (post_content[:100] + "...") if post_content and len(post_content) > 100 else (post_content or ""),
-            "profile_url": f"{settings.FRONTEND_URL}/profile",
-            "post_url": f"{settings.FRONTEND_URL}/posts",
+            "profile_url": f"{settings.FRONTEND_URL}/profile/{actor_id}" if actor_id else f"{settings.FRONTEND_URL}/profile",
+            "post_url": f"{settings.FRONTEND_URL}/posts/{post_id}" if post_id else f"{settings.FRONTEND_URL}/posts",
             "connections_url": f"{settings.FRONTEND_URL}/connections",
             "frontend_url": settings.FRONTEND_URL,
             **kwargs

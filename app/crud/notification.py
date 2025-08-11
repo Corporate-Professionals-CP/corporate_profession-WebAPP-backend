@@ -116,7 +116,9 @@ async def create_notification(
                         notification_type=notification.type,
                         actor_name=actor_name,
                         message=notification.message,
-                        post_content=post_content
+                        post_content=post_content,
+                        post_id=notification.post_id,
+                        actor_id=notification.actor_id
                     )
                     logger.info(f"Email notification sent to {recipient.email} for {notification.type}")
         except Exception as email_error:
