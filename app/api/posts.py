@@ -296,7 +296,7 @@ async def repost_content(
                 recipient_id=original_post.user_id,
                 actor_id=current_user.id,
                 type=NotificationType.POST_REPOST,
-                message=f"{current_user.full_name} reposted your post: '{original_post.title[:30]}...'",
+                message=f"{current_user.full_name} reposted your post: '{(original_post.title or 'Untitled')[:30]}...'",
                 reference_id=repost_data["quote_repost"]["id"]
             )
         )

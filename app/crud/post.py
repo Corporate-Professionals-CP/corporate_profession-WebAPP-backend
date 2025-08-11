@@ -1115,7 +1115,7 @@ async def enrich_multiple_posts(
                 if original_post:
                     enriched_data["original_post_info"] = {
                         "id": original_post.id,
-                        "title": original_post.title,
+                        "title": original_post.title or "Untitled",
                         "content": original_post.content,
                         "user": {
                             "id": original_post.user_id,
@@ -1128,7 +1128,7 @@ async def enrich_multiple_posts(
                 # Fallback to basic info without user details
                 enriched_data["original_post_info"] = {
                     "id": post.original_post_id,
-                    "title": None,
+                    "title": "Untitled",
                     "content": "Original post unavailable",
                     "user": {
                         "id": None,
@@ -1248,14 +1248,18 @@ async def enrich_multiple_posts_optimized(
         
         # Handle repost enrichment more efficiently
         if post.is_repost and post.original_post_info:
-            enriched_data["original_post_info"] = post.original_post_info
+            # Ensure title is not None in existing original_post_info
+            original_info = post.original_post_info.copy() if isinstance(post.original_post_info, dict) else post.original_post_info
+            if isinstance(original_info, dict) and original_info.get('title') is None:
+                original_info['title'] = 'Untitled'
+            enriched_data["original_post_info"] = original_info
         elif post.is_repost and post.original_post_id:
             original_post_data = original_posts_map.get(str(post.original_post_id))
             if original_post_data:
                 original_post, original_user = original_post_data
                 enriched_data["original_post_info"] = {
                     "id": original_post.id,
-                    "title": original_post.title,
+                    "title": original_post.title or "Untitled",
                     "content": original_post.content,
                     "user": {
                         "id": original_user.id,
