@@ -46,7 +46,7 @@ async def react_to_post(
                     actor_id=current_user.id,
                     post_id=post.id,
                     type=NotificationType.POST_REACTION,
-                    message=f"{current_user.full_name} reacted to your post."
+                    message=f"{current_user.full_name} reacted to your post: '{(post.title or post.content[:30] or 'your post')[:30]}...'"
                 )
             )
 

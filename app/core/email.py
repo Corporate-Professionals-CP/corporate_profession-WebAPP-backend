@@ -189,8 +189,8 @@ async def send_notification_email(
             "message": message or "",
             "post_content": (post_content[:100] + "...") if post_content and len(post_content) > 100 else (post_content or ""),
             "profile_url": f"{settings.FRONTEND_URL}/profile/{actor_id}" if actor_id else f"{settings.FRONTEND_URL}/profile",
-            "post_url": f"{settings.FRONTEND_URL}/posts/{post_id}" if post_id else f"{settings.FRONTEND_URL}/posts",
-            "connections_url": f"{settings.FRONTEND_URL}/connections",
+            "post_url": f"{settings.FRONTEND_URL}/dashboard/post/{post_id}" if post_id else f"{settings.FRONTEND_URL}/dashboard",
+            "connections_url": f"{settings.FRONTEND_URL}/dashboard/network",
             "frontend_url": settings.FRONTEND_URL,
             **kwargs
         }
