@@ -4,6 +4,7 @@ import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text, select
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
 
@@ -31,17 +32,17 @@ async def list_moderators(
 ):
     """List all moderators"""
     try:
-        # Query users with moderator role
+        # Query users with moderator role using ORM
         result = await db.execute(
-            "SELECT id, email, full_name, is_moderator FROM user WHERE is_moderator = true"
+            select(User).where(User.is_moderator == True)
         )
         moderators = []
-        for row in result:
+        for user in result.scalars().all():
             moderators.append({
-                "id": row[0],
-                "email": row[1],
-                "full_name": row[2],
-                "is_moderator": row[3]
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "is_moderator": user.is_moderator
             })
         return moderators
     except Exception as e:

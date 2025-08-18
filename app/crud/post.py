@@ -38,6 +38,7 @@ from app.schemas.enums import NotificationType
 from app.schemas.post import ReactionBreakdown, UserReactionStatus
 from app.models.post_reaction import ReactionType
 from app.crud.post_reaction import get_reactions_for_post
+from app.utils.cache import feed_cache
 
 
 async def is_company_admin_async(session: AsyncSession, company_id: str, user_id: str) -> bool:
@@ -194,6 +195,13 @@ async def create_post(
             str(current_user.id)
         )
         
+        # Clear feed cache to ensure new post appears immediately in feeds
+        try:
+            feed_cache.clear_all()  # Clear all feed caches so new post appears immediately
+        except Exception as e:
+            logger.warning(f"Failed to clear feed cache: {e}")
+            # Don't fail post creation if cache clearing fails
+        
         # Broadcast new post to connected users via WebSocket
         if enriched_post:
             try:
@@ -326,6 +334,13 @@ async def update_post(
         session.add(post)
         await session.commit()
         await session.refresh(post)
+        
+        # Clear feed cache to ensure updated post reflects immediately in feeds
+        try:
+            feed_cache.clear_all()  # Clear all feed caches so updated post appears immediately
+        except Exception as e:
+            logger.warning(f"Failed to clear feed cache: {e}")
+            # Don't fail post update if cache clearing fails
 
         # Set media_urls field for response
         post.media_urls = post.media_url.split(',') if post.media_url else []
@@ -522,6 +537,14 @@ async def delete_post(
         post.updated_at = datetime.utcnow()
         session.add(post)
         await session.commit()
+        
+        # Clear feed cache to ensure deleted post is removed immediately from feeds
+        try:
+            feed_cache.clear_all()  # Clear all feed caches so deleted post disappears immediately
+        except Exception as e:
+            logger.warning(f"Failed to clear feed cache: {e}")
+            # Don't fail post deletion if cache clearing fails
+        
         return True
     except Exception as e:
         await session.rollback()

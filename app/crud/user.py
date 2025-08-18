@@ -20,6 +20,7 @@ from fastapi import HTTPException, status, UploadFile
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session, selectinload
 from app.models.user import User
+from app.utils.cache import user_cache
 from app.utils.file_handling import save_uploaded_file, delete_user_file
 from app.models.user import User
 from app.models.skill import Skill
@@ -566,6 +567,10 @@ async def upload_user_profile_image(
         user.update_profile_completion()
         await session.commit()
         await session.refresh(user)
+        
+        # Clear user from cache to ensure fresh data is returned immediately
+        user_cache.remove(str(user_id))
+        
         return user
         
     except HTTPException as e:
@@ -606,6 +611,9 @@ async def delete_user_profile_image(session: AsyncSession, user_id: UUID) -> Non
         user.update_profile_completion()
         session.add(user)
         await session.commit()
+        
+        # Clear user from cache to ensure fresh data is returned immediately
+        user_cache.remove(str(user_id))
     except CustomHTTPException:
         await session.rollback()
         raise
