@@ -165,7 +165,7 @@ async def search_users_for_mention(
             id=user.id,
             full_name=user.full_name,
             username=user.email.split('@')[0] if user.email else None,  # Temporary username
-            profile_image_url=user.profile_image_url,
+            profile_image_url=f"{user.profile_image_url}?v={int(user.profile_image_uploaded_at.timestamp())}" if user.profile_image_url and user.profile_image_uploaded_at else user.profile_image_url,
             job_title=user.job_title,
             company=user.company,
             is_connected=user.id in connected_user_ids
@@ -235,7 +235,7 @@ async def get_mention_notifications(
                 "mentioning_user": {
                     "id": mentioning_user.id,
                     "full_name": mentioning_user.full_name,
-                    "profile_image_url": mentioning_user.profile_image_url
+                    "profile_image_url": f"{mentioning_user.profile_image_url}?v={int(mentioning_user.profile_image_uploaded_at.timestamp())}" if mentioning_user.profile_image_url and mentioning_user.profile_image_uploaded_at else mentioning_user.profile_image_url
                 },
                 "mentioned_at": mention.created_at,
                 "mention_text": mention.mention_text

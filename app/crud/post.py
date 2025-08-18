@@ -1107,9 +1107,14 @@ async def enrich_multiple_posts(
             
             total_reactions += count
 
+        # Add cache-busting to user profile image URL
+        user_data = user.__dict__.copy()
+        if user.profile_image_url and user.profile_image_uploaded_at:
+            user_data["profile_image_url"] = f"{user.profile_image_url}?v={int(user.profile_image_uploaded_at.timestamp())}"
+        
         enriched_data = {
             **post.__dict__,
-            "user": user,
+            "user": type(user)(**user_data),
             "total_comments": comment_map.get(post_id_str, 0),
             "total_reactions": total_reactions,
             "is_bookmarked": bookmark_map.get(post_id_str, 0) > 0,
@@ -1258,9 +1263,14 @@ async def enrich_multiple_posts_optimized(
             
             total_reactions += count
         
+        # Add cache-busting to user profile image URL
+        user_data = user.__dict__.copy()
+        if user.profile_image_url and user.profile_image_uploaded_at:
+            user_data["profile_image_url"] = f"{user.profile_image_url}?v={int(user.profile_image_uploaded_at.timestamp())}"
+        
         enriched_data = {
             **post.__dict__,
-            "user": user,
+            "user": type(user)(**user_data),
             "total_comments": comment_map.get(post_id_str, 0),
             "total_reactions": total_reactions,
             "is_bookmarked": bookmark_map.get(post_id_str, 0) > 0,

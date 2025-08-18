@@ -72,6 +72,10 @@ async def get_own_profile(
     user_data.profile_completion = profile_completion.completion_percentage
     user_data.missing_fields = profile_completion.missing_fields
     user_data.sections = profile_completion.sections
+    
+    # Add cache-busting parameter to profile image URL
+    if user_data.profile_image_url and current_user.profile_image_uploaded_at:
+        user_data.profile_image_url = f"{user_data.profile_image_url}?v={int(current_user.profile_image_uploaded_at.timestamp())}"
 
     return user_data
 
@@ -117,7 +121,7 @@ async def get_profile(
             visibility=user.visibility,
             contact=contact,
             location=user.location,
-            profile_image_url=user.profile_image_url,
+            profile_image_url=f"{user.profile_image_url}?v={int(user.profile_image_uploaded_at.timestamp())}" if user.profile_image_url and user.profile_image_uploaded_at else user.profile_image_url,
             skills=user.skills or [],
             avatar_text=initials,
             avatar_color=color

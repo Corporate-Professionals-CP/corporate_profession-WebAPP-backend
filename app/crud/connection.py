@@ -489,7 +489,7 @@ async def _format_user_for_suggestions(user: User) -> dict:
         "industry": user.industry,
         "years_of_experience": user.years_of_experience,
         "job_title": user.job_title,
-        "profile_image_url": user.profile_image_url,
+        "profile_image_url": f"{user.profile_image_url}?v={int(user.profile_image_uploaded_at.timestamp())}" if user.profile_image_url and user.profile_image_uploaded_at else user.profile_image_url,
         "avatar_text": user.full_name[:2].upper() if user.full_name else None,  # Generate initials
         "recruiter_tag": user.recruiter_tag,
         "created_at": user.created_at,

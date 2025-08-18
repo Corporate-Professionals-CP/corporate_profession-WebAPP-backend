@@ -86,7 +86,7 @@ async def get_user_mention_info(
         id=user.id,
         full_name=user.full_name,
         username=user.email.split('@')[0] if user.email else None,  # Temporary username
-        profile_image_url=user.profile_image_url,
+        profile_image_url=f"{user.profile_image_url}?v={int(user.profile_image_uploaded_at.timestamp())}" if user.profile_image_url and user.profile_image_uploaded_at else user.profile_image_url,
         job_title=user.job_title,
         company=user.company
     )

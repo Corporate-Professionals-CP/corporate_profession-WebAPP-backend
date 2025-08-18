@@ -126,7 +126,11 @@ def transform_results(
                 full_name=user.full_name,
                 job_title=(user.job_title if not getattr(user, "hide_profile", False) else None),
                 company=(user.company if not getattr(user, "hide_profile", False) else None),
-                profile_image_url=(user.profile_image_url if not getattr(user, "hide_profile", False) else None),
+                profile_image_url=(
+                f"{user.profile_image_url}?v={int(user.profile_image_uploaded_at.timestamp())}"
+                if user.profile_image_url and user.profile_image_uploaded_at and not getattr(user, "hide_profile", False)
+                else (user.profile_image_url if not getattr(user, "hide_profile", False) else None)
+            ),
                 industry=(user.industry if not getattr(user, "hide_profile", False) else None),
                 is_recruiter=user.recruiter_tag
             )

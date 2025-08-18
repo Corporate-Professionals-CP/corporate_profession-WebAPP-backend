@@ -9,7 +9,11 @@ def format_connection(conn: Connection) -> ConnectionRead:
             "headline": getattr(conn.sender, "headline", None),
             "location": getattr(conn.sender, "location", None),
             "pronouns": getattr(conn.sender, "pronouns", None),
-            "profile_image_url": getattr(conn.sender, "profile_image_url", None),
+            "profile_image_url": (
+            f"{conn.sender.profile_image_url}?v={int(conn.sender.profile_image_uploaded_at.timestamp())}"
+            if getattr(conn.sender, "profile_image_url", None) and getattr(conn.sender, "profile_image_uploaded_at", None)
+            else getattr(conn.sender, "profile_image_url", None)
+        ),
             "avatar_text": getattr(conn.sender, "avatar_text", None),
             "recruiter_tag": getattr(conn.sender, "recruiter_tag", False),
             "created_at": conn.sender.created_at,
@@ -23,7 +27,11 @@ def format_connection(conn: Connection) -> ConnectionRead:
             "headline": getattr(conn.receiver, "headline", None),
             "location": getattr(conn.receiver, "location", None),
             "pronouns": getattr(conn.receiver, "pronouns", None),
-            "profile_image_url": getattr(conn.receiver, "profile_image_url", None),
+            "profile_image_url": (
+            f"{conn.receiver.profile_image_url}?v={int(conn.receiver.profile_image_uploaded_at.timestamp())}"
+            if getattr(conn.receiver, "profile_image_url", None) and getattr(conn.receiver, "profile_image_uploaded_at", None)
+            else getattr(conn.receiver, "profile_image_url", None)
+        ),
             "avatar_text": getattr(conn.receiver, "avatar_text", None),
             "recruiter_tag": getattr(conn.receiver, "recruiter_tag", False),
             "created_at": conn.receiver.created_at,
