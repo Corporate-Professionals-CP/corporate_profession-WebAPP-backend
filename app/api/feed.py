@@ -201,36 +201,24 @@ async def get_network_feed(
                 Post.expires_at.is_(None),
                 Post.expires_at > datetime.utcnow()
             ),
-            # Network visibility based on user's industry status
+            # Network visibility - more inclusive for connected users
             or_(
                 # Always show posts with followers visibility from connected users
                 and_(
                     Post.visibility == PostVisibility.FOLLOWERS,
                     Post.user_id.in_(connected_user_ids)
                 ),
-                # For users with industry - strict industry filtering
+                # Show public posts from connected users (regardless of industry)
                 and_(
-                    current_user.industry is not None,
-                    or_(
-                        # Public posts from same industry network connections
-                        and_(
-                            Post.visibility == PostVisibility.PUBLIC,
-                            Post.industry == current_user.industry,
-                            Post.industry.isnot(None)
-                        ),
-                        # Industry posts from same industry
-                        and_(
-                            Post.visibility == PostVisibility.INDUSTRY,
-                            Post.industry == current_user.industry,
-                            Post.industry.isnot(None)
-                        )
-                    )
-                ),
-                # For new users without industry - show public posts from network
-                and_(
-                    current_user.industry is None,
                     Post.visibility == PostVisibility.PUBLIC,
-                    Post.created_at > datetime.utcnow() - timedelta(days=3)  # Recent posts only
+                    Post.user_id.in_(connected_user_ids)
+                ),
+                # Show industry posts from connected users if industries match
+                and_(
+                    Post.visibility == PostVisibility.INDUSTRY,
+                    Post.user_id.in_(connected_user_ids),
+                    current_user.industry is not None,
+                    Post.industry == current_user.industry
                 )
             )
         ]
