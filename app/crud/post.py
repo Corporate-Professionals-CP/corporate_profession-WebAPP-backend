@@ -438,6 +438,13 @@ async def repost_post(
     session.add(repost)
     await session.commit()
     await session.refresh(repost)
+    
+    # Clear feed cache to ensure new repost appears immediately in feeds
+    try:
+        feed_cache.clear_all()  # Clear all feed caches so new repost appears immediately
+    except Exception as e:
+        logger.warning(f"Failed to clear feed cache: {e}")
+        # Don't fail repost creation if cache clearing fails
 
     # Prepare the combined response
     response = {
