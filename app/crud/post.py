@@ -40,6 +40,14 @@ from app.models.post_reaction import ReactionType
 from app.crud.post_reaction import get_reactions_for_post
 from app.utils.cache import feed_cache
 
+def add_cache_busting_to_media_urls(media_urls: List[str], updated_at: Optional[datetime] = None) -> List[str]:
+    """Add cache-busting parameters to media URLs"""
+    if not media_urls or not updated_at:
+        return media_urls
+    
+    timestamp = int(updated_at.timestamp())
+    return [f"{url}?v={timestamp}" if '?' not in url else f"{url}&v={timestamp}" for url in media_urls]
+
 
 async def is_company_admin_async(session: AsyncSession, company_id: str, user_id: str) -> bool:
     """Async version to check if user is admin of company"""
@@ -386,7 +394,10 @@ async def repost_post(
             "id": str(original_poster.id),
             "full_name": original_poster.full_name or ""
         },
-        "media_urls": original_post.media_url.split(',') if original_post.media_url else []
+        "media_urls": add_cache_busting_to_media_urls(
+            original_post.media_url.split(',') if original_post.media_url else [],
+            original_post.updated_at
+        )
     }
 
     # Validate media
@@ -442,7 +453,10 @@ async def repost_post(
             "content": original_post.content,
             "user_id": str(original_poster.id),
             "user_full_name": original_poster.full_name,
-            "media_urls": original_post.media_url.split(',') if original_post.media_url else [],
+            "media_urls": add_cache_busting_to_media_urls(
+                original_post.media_url.split(',') if original_post.media_url else [],
+                original_post.updated_at
+            ),
             "created_at": original_post.published_at.isoformat()
         }
     }
@@ -1137,6 +1151,20 @@ async def enrich_multiple_posts(
                 original_info = post.original_post_info.copy()
                 if original_info.get('title') is None:
                     original_info['title'] = 'Untitled'
+                # Add cache-busting to existing media URLs if they exist
+                if 'media_urls' in original_info and original_info['media_urls']:
+                    # Try to get the original post's updated_at for cache-busting
+                    try:
+                        original_post_stmt = select(Post.updated_at).where(Post.id == post.original_post_id)
+                        original_post_result = await db.execute(original_post_stmt)
+                        original_updated_at = original_post_result.scalar_one_or_none()
+                        if original_updated_at:
+                            original_info['media_urls'] = add_cache_busting_to_media_urls(
+                                original_info['media_urls'],
+                                original_updated_at
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to add cache-busting to existing original_post_info media URLs: {e}")
                 enriched_data["original_post_info"] = original_info
             else:
                 enriched_data["original_post_info"] = post.original_post_info
@@ -1156,7 +1184,11 @@ async def enrich_multiple_posts(
                             "id": original_post.user_id,
                             "full_name": original_post.user.full_name if original_post.user else "Unknown User",
                             "job_title": original_post.user.job_title if original_post.user else None
-                        }
+                        },
+                        "media_urls": add_cache_busting_to_media_urls(
+                            original_post.media_url.split(',') if original_post.media_url else [],
+                            original_post.updated_at
+                        )
                     }
             except Exception as e:
                 logger.warning(f"Failed to load original post info for repost {post.id}: {e}")
@@ -1290,8 +1322,19 @@ async def enrich_multiple_posts_optimized(
         if post.is_repost and post.original_post_info:
             # Ensure title is not None in existing original_post_info
             original_info = post.original_post_info.copy() if isinstance(post.original_post_info, dict) else post.original_post_info
-            if isinstance(original_info, dict) and original_info.get('title') is None:
-                original_info['title'] = 'Untitled'
+            if isinstance(original_info, dict):
+                if original_info.get('title') is None:
+                    original_info['title'] = 'Untitled'
+                # Add cache-busting to existing media URLs if they exist
+                if 'media_urls' in original_info and original_info['media_urls']:
+                    # Use the bulk-loaded original post data if available
+                    original_post_data = original_posts_map.get(str(post.original_post_id))
+                    if original_post_data:
+                        original_post, _ = original_post_data
+                        original_info['media_urls'] = add_cache_busting_to_media_urls(
+                            original_info['media_urls'],
+                            original_post.updated_at
+                        )
             enriched_data["original_post_info"] = original_info
         elif post.is_repost and post.original_post_id:
             original_post_data = original_posts_map.get(str(post.original_post_id))
@@ -1307,7 +1350,10 @@ async def enrich_multiple_posts_optimized(
                         "email": original_user.email
                     },
                     "created_at": original_post.created_at.isoformat(),
-                    "media_urls": original_post.media_url.split(',') if original_post.media_url else []
+                    "media_urls": add_cache_busting_to_media_urls(
+                        original_post.media_url.split(',') if original_post.media_url else [],
+                        original_post.updated_at
+                    )
                 }
         
         enriched.append(PostRead(**enriched_data))
