@@ -41,9 +41,9 @@ class UserCreate(UserBase):
 
     password: SecretStr = Field(..., min_length=8)
     password_confirmation: SecretStr
-    skills: Optional[List[int]] = Field(
+    skills: Optional[List[str]] = Field(
         default_factory=list,
-        description="List of skill IDs to associate with the user during signup"
+        description="List of skill names to associate with the user during signup"
     )
 
 

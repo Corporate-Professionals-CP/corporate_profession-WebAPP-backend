@@ -8,6 +8,7 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 
 from app.models.skill import Skill, UserSkill
 from app.core.exceptions import CustomHTTPException
@@ -121,6 +122,42 @@ async def add_user_skills_bulk(db: AsyncSession, user_id: str, skill_ids: List[i
             status_code=400,
             detail="One or more skills are already associated with this user"
         )
+    except Exception:
+        await db.rollback()
+        raise CustomHTTPException(
+            status_code=500,
+            detail="Failed to associate skills with user"
+        )
+
+
+async def add_user_skills_by_names(db: AsyncSession, user_id: str, skill_names: List[str]):
+    """Associate multiple skills with a user by skill names during signup"""
+    if not skill_names:
+        return
+    
+    try:
+        skill_ids = []
+        
+        for name in skill_names:
+            name_clean = name.strip().title()
+            
+            # Check if skill exists
+            result = await db.execute(
+                select(Skill).where(func.lower(Skill.name) == name_clean.lower())
+            )
+            skill = result.scalars().first()
+            
+            # Create skill if it doesn't exist
+            if not skill:
+                skill = await create(db, name_clean)
+            
+            skill_ids.append(skill.id)
+        
+        # Use existing bulk function with skill IDs
+        await add_user_skills_bulk(db, user_id, skill_ids)
+        
+    except CustomHTTPException:
+        raise
     except Exception:
         await db.rollback()
         raise CustomHTTPException(
