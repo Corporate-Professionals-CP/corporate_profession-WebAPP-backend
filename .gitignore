@@ -5,3 +5,4 @@ gcs_credentials.json
 debug.log
 venv/
 repost_data_structure_guide.py
+delete_user_account.py

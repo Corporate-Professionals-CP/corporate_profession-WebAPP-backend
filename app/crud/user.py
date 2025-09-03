@@ -81,10 +81,13 @@ async def create_user(session: AsyncSession, user_data: Union[UserCreate, dict])
         # Handle different input types
         if isinstance(user_data, dict):
             # Directly create from dictionary (Google OAuth)
-            db_user = User(**user_data)
+            # Exclude skills as they're handled separately
+            user_data_clean = {k: v for k, v in user_data.items() if k != 'skills'}
+            db_user = User(**user_data_clean)
         else:
             # Handle email/password signup
-            user_dict = user_data.dict(exclude={"password", "password_confirmation"})
+            # Exclude skills, password, and password_confirmation
+            user_dict = user_data.dict(exclude={"password", "password_confirmation", "skills"})
             db_user = User(**user_dict)
             db_user.set_password(user_data.password.get_secret_value())
 
