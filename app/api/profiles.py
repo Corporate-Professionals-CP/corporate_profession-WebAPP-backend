@@ -34,6 +34,7 @@ from app.crud.contact import get_user_contacts
 from google.cloud.exceptions import GoogleCloudError
 from urllib.parse import urlparse
 from app.core.config import settings
+from app.schemas.user import UserUpdate as UserUpdateSchema
 from fastapi.responses import FileResponse
 
 from app.utils.file_handling import save_uploaded_file, delete_user_file, bucket
@@ -68,14 +69,19 @@ async def get_own_profile(
     """
     profile_completion = await get_profile_completion(db, current_user.id)
 
-    user_data = UserRead.from_orm(current_user)
+    # Refresh user data from database to ensure we have the latest profile image info
+    fresh_user = await get_user_by_id(db, current_user.id)
+    if not fresh_user:
+        fresh_user = current_user
+    
+    user_data = UserRead.from_orm(fresh_user)
     user_data.profile_completion = profile_completion.completion_percentage
     user_data.missing_fields = profile_completion.missing_fields
     user_data.sections = profile_completion.sections
     
     # Add cache-busting parameter to profile image URL
-    if user_data.profile_image_url and current_user.profile_image_uploaded_at:
-        user_data.profile_image_url = f"{user_data.profile_image_url}?v={int(current_user.profile_image_uploaded_at.timestamp())}"
+    if user_data.profile_image_url and fresh_user.profile_image_uploaded_at:
+        user_data.profile_image_url = f"{user_data.profile_image_url}?v={int(fresh_user.profile_image_uploaded_at.timestamp())}"
 
     return user_data
 
@@ -222,18 +228,32 @@ async def update_profile(
                 )
 
 
-    updated_user = await update_user(db, user_id, user_update, current_user)
-    if not updated_user:
-        raise CustomHTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update profile",
-            error_code=PROFILE_UPDATE_FAILED,
-        )
-    updated_user.update_profile_completion()
+    # Exclude profile image fields from general updates to prevent accidental overwrites
+    update_data = user_update.dict(exclude_unset=True)
+    if 'profile_image_url' in update_data:
+        del update_data['profile_image_url']
+    if 'profile_image_uploaded_at' in update_data:
+        del update_data['profile_image_uploaded_at']
+    
+    # Create a new UserUpdate object without profile image fields
+    filtered_update = UserUpdateSchema(**update_data)
+    
+    updated_user = await update_user(db, user_id, filtered_update, current_user)
 
-    await db.commit()
+    # Get updated profile completion
+    profile_completion = await get_profile_completion(db, user_id)
 
-    return updated_user
+    # Convert to UserRead and add profile completion data
+    user_data = UserRead.from_orm(updated_user)
+    user_data.profile_completion = profile_completion.completion_percentage
+    user_data.missing_fields = profile_completion.missing_fields
+    user_data.sections = profile_completion.sections
+    
+    # Add cache-busting parameter to profile image URL
+    if user_data.profile_image_url and updated_user.profile_image_uploaded_at:
+        user_data.profile_image_url = f"{user_data.profile_image_url}?v={int(updated_user.profile_image_uploaded_at.timestamp())}"
+
+    return user_data
 
 
 @router.post("/{user_id}/cv", response_model=UserRead)
@@ -414,7 +434,14 @@ async def upload_profile_image(
         )
 
     try:
-        return await upload_user_profile_image(db, user_id, file)
+        updated_user = await upload_user_profile_image(db, user_id, file)
+        
+        # Ensure the response includes cache-busted profile image URL
+        user_data = UserRead.from_orm(updated_user)
+        if user_data.profile_image_url and updated_user.profile_image_uploaded_at:
+            user_data.profile_image_url = f"{user_data.profile_image_url}?v={int(updated_user.profile_image_uploaded_at.timestamp())}"
+        
+        return user_data
     except CustomHTTPException:
         raise
     except Exception as e:

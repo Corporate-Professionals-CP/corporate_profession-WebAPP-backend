@@ -24,6 +24,7 @@ from app.utils.cache import user_cache
 from app.utils.file_handling import save_uploaded_file, delete_user_file
 from app.models.user import User
 from app.models.skill import Skill
+from app.utils.cache import feed_cache
 from app.schemas.user import (
     UserCreate,
     UserUpdate,
@@ -211,6 +212,10 @@ async def update_user(
         db_user.update_profile_completion()
         await session.commit()
         await session.refresh(db_user)
+        
+        # Clear user from cache to ensure fresh data is returned
+        user_cache.remove(str(user_id))
+        
         return db_user
     except IntegrityError as e:
         await session.rollback()
@@ -573,6 +578,9 @@ async def upload_user_profile_image(
         
         # Clear user from cache to ensure fresh data is returned immediately
         user_cache.remove(str(user_id))
+        
+        # Clear feed cache to ensure updated profile images appear in all feeds
+        feed_cache.clear_all()  # Clear all feed caches since this user's posts may appear in other users' feeds
         
         return user
         
