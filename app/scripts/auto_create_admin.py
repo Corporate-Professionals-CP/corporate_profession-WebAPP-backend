@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from app.core.config import settings
 
 async def create_admin_if_not_exists():
-    """Create an admin user if it doesn't already exist"""
+    """Create an admin user if it doesn't already exist, or fix existing user"""
     # Get admin credentials from environment variables
     admin_email = os.getenv("ADMIN_EMAIL")
     admin_password = os.getenv("ADMIN_PASSWORD")
@@ -22,30 +22,56 @@ async def create_admin_if_not_exists():
         return
     
     async with AsyncSessionLocal() as session:
-        # Check if admin already exists
-        existing_admin = await get_user_by_email(session, admin_email)
-        
-        if existing_admin:
-            # If user exists but is not admin, make them admin
-            if not existing_admin.is_admin:
-                existing_admin.is_admin = True
-                existing_admin.is_verified = True
-                existing_admin.is_active = True
-                session.add(existing_admin)
-                await session.commit()
-                print(f"User {admin_email} has been upgraded to admin.")
-            else:
-                print(f"Admin {admin_email} already exists.")
-        else:
-            # Create new admin user
-            user_data = UserCreate(
-                full_name="System Administrator",
-                email=admin_email,
-                password=SecretStr(admin_password),
-                password_confirmation=SecretStr(admin_password)
-            )
+        try:
+            # Check if admin already exists
+            existing_admin = await get_user_by_email(session, admin_email)
             
-            try:
+            if existing_admin:
+                print(f"User {admin_email} found. Checking admin status...")
+                
+                # Import password verification functions
+                from app.core.security import verify_password, get_password_hash
+                
+                # Check and fix admin privileges
+                needs_update = False
+                
+                if not existing_admin.is_admin:
+                    print("  - Setting is_admin = True")
+                    existing_admin.is_admin = True
+                    needs_update = True
+                
+                if not existing_admin.is_verified:
+                    print("  - Setting is_verified = True")
+                    existing_admin.is_verified = True
+                    needs_update = True
+                
+                if not existing_admin.is_active:
+                    print("  - Setting is_active = True")
+                    existing_admin.is_active = True
+                    needs_update = True
+                
+                # Check and fix password if needed
+                if not verify_password(admin_password, existing_admin.hashed_password):
+                    print("  - Updating password hash")
+                    existing_admin.hashed_password = get_password_hash(admin_password)
+                    needs_update = True
+                
+                if needs_update:
+                    session.add(existing_admin)
+                    await session.commit()
+                    print(f"Admin user {admin_email} has been updated with correct privileges.")
+                else:
+                    print(f"Admin {admin_email} already exists with correct configuration.")
+            else:
+                # Create new admin user
+                print(f"Creating new admin user: {admin_email}")
+                user_data = UserCreate(
+                    full_name="System Administrator",
+                    email=admin_email,
+                    password=SecretStr(admin_password),
+                    password_confirmation=SecretStr(admin_password)
+                )
+                
                 # Create the user
                 new_admin = await create_user(session, user_data)
                 
@@ -57,9 +83,11 @@ async def create_admin_if_not_exists():
                 session.add(new_admin)
                 await session.commit()
                 print(f"Admin user {admin_email} created successfully.")
-            except Exception as e:
-                print(f"Error creating admin user: {str(e)}")
-                await session.rollback()
+                
+        except Exception as e:
+            print(f"Error handling admin user: {str(e)}")
+            await session.rollback()
+            raise
 
 if __name__ == "__main__":
     # This allows the script to be run directly for testing
