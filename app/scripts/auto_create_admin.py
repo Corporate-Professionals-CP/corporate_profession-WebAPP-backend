@@ -1,6 +1,10 @@
 import asyncio
 import os
+from dotenv import load_dotenv
 from app.db.database import AsyncSessionLocal
+
+# Load environment variables from .env file
+load_dotenv()
 from app.models.user import User
 from app.crud.user import get_user_by_email, create_user
 from app.schemas.user import UserCreate

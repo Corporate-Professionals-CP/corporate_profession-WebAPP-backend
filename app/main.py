@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.requests import Request
 from app.core.exceptions import CustomHTTPException
 from app.utils.analytics_scheduler import start_analytics_scheduler, stop_analytics_scheduler
-
+from app.scripts.auto_create_admin import create_admin_if_not_exists
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -24,7 +24,6 @@ async def lifespan(app: FastAPI):
     await init_db()
     
     # Create admin user if not exists
-    from app.scripts.auto_create_admin import create_admin_if_not_exists
     await create_admin_if_not_exists()
     
     await start_analytics_scheduler()

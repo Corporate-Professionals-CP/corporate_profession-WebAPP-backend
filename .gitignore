@@ -6,3 +6,4 @@ debug.log
 venv/
 repost_data_structure_guide.py
 delete_user_account.py
+delete_all_posts.py
